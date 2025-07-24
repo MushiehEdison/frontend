@@ -19,7 +19,7 @@ const History = () => {
       setLoading(true);
       setError(null);
       try {
-        const response = await fetch(`http://localhost:5000/api/auth/conversations?page=${page}&per_page=10`, {
+        const response = await fetch(`https://backend-b5jw.onrender.com/api/auth/conversations?page=${page}&per_page=10`, {
           method: 'GET',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -70,7 +70,7 @@ const History = () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch('http://localhost:5000/api/auth/conversation', {
+      const response = await fetch('https://backend-b5jw.onrender.com/api/auth/conversation', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,

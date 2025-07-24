@@ -133,8 +133,8 @@ const Home = () => {
     const isValidId = conversationId && /^\d+$/.test(conversationId);
     console.log('Fetching messages for conversationId:', conversationId, 'Valid:', isValidId);
     const url = isValidId 
-      ? `http://localhost:5000/api/auth/conversation/${conversationId}`
-      : 'http://localhost:5000/api/auth/conversation';
+      ? `https://backend-b5jw.onrender.com/api/auth/conversation/${conversationId}`
+      : 'https://backend-b5jw.onrender.com/api/auth/conversation';
 
     fetch(url, {
       method: 'GET',
@@ -255,8 +255,8 @@ const Home = () => {
 
     const isValidId = conversationId && /^\d+$/.test(conversationId);
     const url = isValidId 
-      ? `http://localhost:5000/api/auth/conversation/${conversationId}`
-      : 'http://localhost:5000/api/auth/conversation';
+      ? `https://backend-b5jw.onrender.com/api/auth/conversation/${conversationId}`
+      : 'https://backend-b5jw.onrender.com/api/auth/conversation';
 
     console.log('Sending POST request to:', url, 'with body:', { message: text, isMicInput });
     fetch(url, {

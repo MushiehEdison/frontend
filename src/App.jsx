@@ -19,7 +19,7 @@ const AuthProvider = ({ children }) => {
   useEffect(() => {
     console.log('AuthProvider useEffect: Checking token', token);
     if (token) {
-      fetch('http://localhost:5000/api/auth/verify', {
+      fetch('https://backend-b5jw.onrender.com/api/auth/verify', {
         method: 'GET',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       })

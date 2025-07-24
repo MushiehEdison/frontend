@@ -17,7 +17,7 @@ const Sidebar = ({ isOpen, onClose, isDarkMode }) => {
         throw new Error('No authentication token found');
       }
 
-      const response = await fetch('http://localhost:5000/api/auth/conversation', {
+      const response = await fetch('https://backend-b5jw.onrender.com/api/auth/conversation', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
