@@ -24,6 +24,7 @@ const Home = () => {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [networkStatus, setNetworkStatus] = useState(navigator.onLine ? 'online' : 'offline');
   const [isMicInput, setIsMicInput] = useState(false); // Track mic-based input
+  const [audioError, setAudioError] = useState(null); // Track audio playback errors
   const messagesEndRef = useRef(null);
   const silenceTimerRef = useRef(null);
   const messageIdCounter = useRef(1);
@@ -49,6 +50,7 @@ const Home = () => {
 
   // Remove emojis from text
   const stripEmojis = (text) => {
+    if (!text) return '';
     const cleanText = text.replace(/[\p{Emoji}\p{Emoji_Presentation}\p{Emoji_Modifier}\p{Emoji_Modifier_Base}\p{Emoji_Component}\u{200D}\u{FE0F}]+/gu, '').trim();
     console.log('Original text:', text, 'Cleaned text:', cleanText);
     return cleanText;
@@ -58,12 +60,14 @@ const Home = () => {
   const playAudio = (base64Audio) => {
     if (!base64Audio) {
       console.log('No audio data to play');
+      setAudioError('No audio response received from server');
       return;
     }
     try {
       const audio = new Audio(`data:audio/mp3;base64,${base64Audio}`);
       audio.onplay = () => {
         console.log('Audio playback started, isListening:', isListening);
+        setAudioError(null);
         if (isListening) {
           wasListeningRef.current = true;
           setIsListening(false);
@@ -78,15 +82,21 @@ const Home = () => {
         console.log('Audio playback ended, wasListening:', wasListeningRef.current);
         if (wasListeningRef.current && networkStatus === 'online') {
           setIsListening(true);
-          SpeechRecognition.startListening({ continuous: true, interimResults: true, language: 'en-US' });
+          SpeechRecognition.startListening({ continuous: true, interimResults: true, language: user?.language || 'en-US' });
           console.log('Mic restarted after audio playback');
         }
       };
+      audio.onerror = (error) => {
+        console.error('Audio playback error:', error);
+        setAudioError('Failed to play audio response');
+      };
       audio.play().catch(error => {
         console.error('Error playing audio:', error);
+        setAudioError('Failed to play audio response');
       });
     } catch (error) {
       console.error('Error setting up audio:', error);
+      setAudioError('Error setting up audio playback');
     }
   };
 
@@ -94,6 +104,13 @@ const Home = () => {
     console.log('Toggling listening:', isListening ? 'Stopping' : 'Starting');
     if (networkStatus === 'offline') {
       console.log('Cannot toggle listening: Offline');
+      setAudioError('No internet connection. Voice input requires an active connection.');
+      return;
+    }
+
+    if (!SpeechRecognition.browserSupportsSpeechRecognition()) {
+      console.log('Browser does not support speech recognition');
+      setAudioError('Your browser does not support speech recognition.');
       return;
     }
 
@@ -108,12 +125,13 @@ const Home = () => {
       }
     } else {
       setIsListening(true);
-      setIsMicInput(true); // Flag mic input
+      setIsMicInput(true);
+      setAudioError(null);
       resetTranscript();
       SpeechRecognition.startListening({ 
         continuous: true, 
         interimResults: true, 
-        language: 'en-US' 
+        language: user?.language || 'en-US' 
       });
     }
   };
@@ -191,7 +209,7 @@ const Home = () => {
         handleSendMessage(finalTranscript.trim());
         resetTranscript();
         if (isListening && networkStatus === 'online') {
-          SpeechRecognition.startListening({ continuous: true, interimResults: true, language: 'en-US' });
+          SpeechRecognition.startListening({ continuous: true, interimResults: true, language: user?.language || 'en-US' });
         }
       }, 3000);
     }
@@ -209,6 +227,7 @@ const Home = () => {
         if (silenceTimerRef.current) {
           clearTimeout(silenceTimerRef.current);
         }
+        setAudioError('No internet connection. Voice input requires an active connection.');
       }
     };
 
@@ -236,7 +255,7 @@ const Home = () => {
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       }]);
       if (isMicInput) {
-        playAudio(null); // No audio for error message
+        setAudioError('Please sign in to use voice input.');
       }
       return;
     }
@@ -291,6 +310,9 @@ const Home = () => {
             const cleanText = stripEmojis(data.messages.find(msg => !msg.isUser && msg.timestamp === data.messages[data.messages.length - 1].timestamp)?.text);
             console.log('Playing audio for cleaned text:', cleanText);
             playAudio(data.audio);
+          } else if (isMicInput && !data.audio) {
+            console.warn('No audio received in response for mic input');
+            setAudioError('No audio response received from server');
           }
           if (!isValidId && data.id) {
             console.log('Navigating to new conversation ID:', data.id);
@@ -306,7 +328,7 @@ const Home = () => {
           };
           setMessages((prev) => [...prev, errorResponse]);
           if (isMicInput) {
-            playAudio(null); // No audio for error
+            setAudioError('No audio response received from server');
           }
         }
       })
@@ -321,7 +343,7 @@ const Home = () => {
         };
         setMessages((prev) => [...prev, errorResponse]);
         if (isMicInput) {
-          playAudio(null); // No audio for error
+          setAudioError('Failed to connect to server for audio response');
         }
       });
     // Reset mic input flag after sending
@@ -375,6 +397,11 @@ const Home = () => {
             <div className="flex justify-center my-4">
               <StatusIndicator status={status} isVisible={showStatus} />
             </div>
+            {audioError && (
+              <div className="px-4 text-red-500 text-sm mb-4">
+                {audioError}
+              </div>
+            )}
             
             <div className="flex-1 space-y-4 overflow-y-auto overflow-x-hidden overscroll-y-contain scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-transparent px-1">
               <div className="w-full max-w-full">
