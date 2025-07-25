@@ -105,8 +105,10 @@ const App = () => {
       <Router>
         <main className="pt-16 pb-20">
           <Routes>
-            <Route path="/signin" element={<SignIn />} />
+            
             <Route path="/signup" element={<SignUp />} />
+            <Route path="/signin" element={<SignIn />} />
+            
             <Route
               path="/"
               element={
