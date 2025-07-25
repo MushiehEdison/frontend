@@ -23,12 +23,12 @@ const Home = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [networkStatus, setNetworkStatus] = useState(navigator.onLine ? 'online' : 'offline');
-  const [isMicInput, setIsMicInput] = useState(false); // Track mic-based input
-  const [audioError, setAudioError] = useState(null); // Track audio playback errors
+  const [isMicInput, setIsMicInput] = useState(false);
+  const [audioError, setAudioError] = useState(null);
   const messagesEndRef = useRef(null);
   const silenceTimerRef = useRef(null);
   const messageIdCounter = useRef(1);
-  const wasListeningRef = useRef(false); // Track listening state before audio playback
+  const wasListeningRef = useRef(false);
 
   const { transcript, interimTranscript, finalTranscript, resetTranscript, listening } = useSpeechRecognition();
 
@@ -48,7 +48,6 @@ const Home = () => {
     localStorage.removeItem('chatMessages');
   };
 
-  // Remove emojis from text
   const stripEmojis = (text) => {
     if (!text) return '';
     const cleanText = text.replace(/[\p{Emoji}\p{Emoji_Presentation}\p{Emoji_Modifier}\p{Emoji_Modifier_Base}\p{Emoji_Component}\u{200D}\u{FE0F}]+/gu, '').trim();
@@ -56,7 +55,6 @@ const Home = () => {
     return cleanText;
   };
 
-  // Play base64 audio
   const playAudio = (base64Audio) => {
     if (!base64Audio) {
       console.log('No audio data to play');
@@ -82,6 +80,7 @@ const Home = () => {
         console.log('Audio playback ended, wasListening:', wasListeningRef.current);
         if (wasListeningRef.current && networkStatus === 'online') {
           setIsListening(true);
+          setIsMicInput(true);
           SpeechRecognition.startListening({ continuous: true, interimResults: true, language: user?.language || 'en-US' });
           console.log('Mic restarted after audio playback');
         }
@@ -123,10 +122,15 @@ const Home = () => {
       if (silenceTimerRef.current) {
         clearTimeout(silenceTimerRef.current);
       }
+      setStatus('');
+      setShowStatus(false);
+      console.log('Mic stopped and reset');
     } else {
       setIsListening(true);
       setIsMicInput(true);
       setAudioError(null);
+      setStatus('listening...');
+      setShowStatus(true);
       resetTranscript();
       SpeechRecognition.startListening({ 
         continuous: true, 
@@ -147,7 +151,6 @@ const Home = () => {
       return;
     }
 
-    // Validate conversationId is an integer
     const isValidId = conversationId && /^\d+$/.test(conversationId);
     console.log('Fetching messages for conversationId:', conversationId, 'Valid:', isValidId);
     const url = isValidId 
@@ -305,7 +308,6 @@ const Home = () => {
           console.log('Setting formatted messages:', formattedMessages);
           setMessages(formattedMessages);
           messageIdCounter.current = formattedMessages.length + 1;
-          // Play AI response audio if input was from mic
           if (isMicInput && data.audio) {
             const cleanText = stripEmojis(data.messages.find(msg => !msg.isUser && msg.timestamp === data.messages[data.messages.length - 1].timestamp)?.text);
             console.log('Playing audio for cleaned text:', cleanText);
@@ -346,7 +348,6 @@ const Home = () => {
           setAudioError('Failed to connect to server for audio response');
         }
       });
-    // Reset mic input flag after sending
     setIsMicInput(false);
   };
 
@@ -441,6 +442,7 @@ const Home = () => {
               <button
                 onClick={handleToggleListening}
                 className={`mt-4 p-2 rounded-full border-2 border-red-500 ${isDarkMode ? 'text-red-400 hover:text-white active:text-white' : 'text-red-500 hover:text-white active:text-white'} hover:bg-red-500 active:bg-red-500 transition-colors`}
+                aria-label="Stop listening"
               >
                 <X className="w-6 h-6" />
               </button>
