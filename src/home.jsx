@@ -29,6 +29,7 @@ const Home = () => {
   const silenceTimerRef = useRef(null);
   const messageIdCounter = useRef(1);
   const wasListeningRef = useRef(false);
+  const speechRecognitionRef = useRef(null);
 
   const { transcript, interimTranscript, finalTranscript, resetTranscript, listening } = useSpeechRecognition();
 
@@ -117,15 +118,32 @@ const Home = () => {
     if (isListening) {
       setIsListening(false);
       setIsMicInput(false);
-      SpeechRecognition.stopListening();
-      SpeechRecognition.abortListening();
+      setStatus('');
+      setShowStatus(false);
       resetTranscript();
+      
+      // Ensure SpeechRecognition is fully stopped
+      try {
+        SpeechRecognition.stopListening();
+        SpeechRecognition.abortListening();
+        if (speechRecognitionRef.current) {
+          speechRecognitionRef.current.onresult = null;
+          speechRecognitionRef.current.onerror = null;
+          speechRecognitionRef.current.onend = null;
+          speechRecognitionRef.current = null;
+          console.log('SpeechRecognition instance cleared');
+        }
+      } catch (error) {
+        console.error('Error stopping SpeechRecognition:', error);
+      }
+
+      // Clear any pending timers
       if (silenceTimerRef.current) {
         clearTimeout(silenceTimerRef.current);
         silenceTimerRef.current = null;
+        console.log('Silence timer cleared');
       }
-      setStatus('');
-      setShowStatus(false);
+
       console.log('Mic fully stopped and reset');
     } else {
       setIsListening(true);
@@ -134,11 +152,15 @@ const Home = () => {
       setStatus('listening...');
       setShowStatus(true);
       resetTranscript();
+      
+      // Initialize new SpeechRecognition instance
+      speechRecognitionRef.current = SpeechRecognition.getRecognition();
       SpeechRecognition.startListening({ 
         continuous: true, 
         interimResults: true, 
         language: user?.language || 'en-US' 
       });
+      console.log('Mic started with new SpeechRecognition instance');
     }
   };
 
@@ -226,13 +248,27 @@ const Home = () => {
       if (!navigator.onLine && isListening) {
         setIsListening(false);
         setIsMicInput(false);
-        SpeechRecognition.stopListening();
-        SpeechRecognition.abortListening();
+        setStatus('');
+        setShowStatus(false);
         resetTranscript();
+        try {
+          SpeechRecognition.stopListening();
+          SpeechRecognition.abortListening();
+          if (speechRecognitionRef.current) {
+            speechRecognitionRef.current.onresult = null;
+            speechRecognitionRef.current.onerror = null;
+            speechRecognitionRef.current.onend = null;
+            speechRecognitionRef.current = null;
+          }
+        } catch (error) {
+          console.error('Error stopping SpeechRecognition on offline:', error);
+        }
         if (silenceTimerRef.current) {
           clearTimeout(silenceTimerRef.current);
+          silenceTimerRef.current = null;
         }
         setAudioError('No internet connection. Voice input requires an active connection.');
+        console.log('Mic stopped due to offline status');
       }
     };
 
@@ -244,6 +280,21 @@ const Home = () => {
       window.removeEventListener('offline', handleNetworkChange);
       if (silenceTimerRef.current) {
         clearTimeout(silenceTimerRef.current);
+      }
+      // Cleanup SpeechRecognition on component unmount
+      if (isListening) {
+        try {
+          SpeechRecognition.stopListening();
+          SpeechRecognition.abortListening();
+          if (speechRecognitionRef.current) {
+            speechRecognitionRef.current.onresult = null;
+            speechRecognitionRef.current.onerror = null;
+            speechRecognitionRef.current.onend = null;
+            speechRecognitionRef.current = null;
+          }
+        } catch (error) {
+          console.error('Error stopping SpeechRecognition on unmount:', error);
+        }
       }
     };
   }, [isListening]);
@@ -260,7 +311,7 @@ const Home = () => {
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       }]);
       if (isMicInput) {
-        setAudioError('Please sign in to use voice input.');
+        setAudioError('Please sign in to use server');
       }
       return;
     }
@@ -271,7 +322,7 @@ const Home = () => {
       isUser: true,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     };
-    console.log('Adding user message to state:', newMessage);
+    console.log('Sent user message: ', newMessage);
     setMessages((prev) => [...prev, newMessage]);
 
     setStatus('framing...');
@@ -279,7 +330,7 @@ const Home = () => {
 
     const isValidId = conversationId && /^\d+$/.test(conversationId);
     const url = isValidId 
-      ? `https://backend-b5jw.onrender.com/api/auth/conversation/${conversationId}`
+      ? `https://backend-b5jw.onrender.com/api/auth/conversation-${conversationId}`
       : 'https://backend-b5jw.onrender.com/api/auth/conversation';
 
     console.log('Sending POST request to:', url, 'with body:', { message: text, isMicInput });
