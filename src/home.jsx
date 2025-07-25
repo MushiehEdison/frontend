@@ -330,7 +330,7 @@ const Home = () => {
 
     const isValidId = conversationId && /^\d+$/.test(conversationId);
     const url = isValidId 
-      ? `https://backend-b5jw.onrender.com/api/auth/conversation-${conversationId}`
+      ? `https://backend-b5jw.onrender.com/api/auth/conversation/${conversationId}`
       : 'https://backend-b5jw.onrender.com/api/auth/conversation';
 
     console.log('Sending POST request to:', url, 'with body:', { message: text, isMicInput });
