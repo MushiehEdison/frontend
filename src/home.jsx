@@ -69,6 +69,7 @@ const Home = () => {
         if (isListening) {
           wasListeningRef.current = true;
           setIsListening(false);
+          setIsMicInput(false);
           SpeechRecognition.stopListening();
           SpeechRecognition.abortListening();
           console.log('Mic stopped during audio playback');
@@ -121,10 +122,11 @@ const Home = () => {
       resetTranscript();
       if (silenceTimerRef.current) {
         clearTimeout(silenceTimerRef.current);
+        silenceTimerRef.current = null;
       }
       setStatus('');
       setShowStatus(false);
-      console.log('Mic stopped and reset');
+      console.log('Mic fully stopped and reset');
     } else {
       setIsListening(true);
       setIsMicInput(true);

@@ -52,7 +52,6 @@ const SignUp = () => {
         break;
       case 'language':
         if (!value) newErrors.language = 'Language is required';
-        else if (value.length > 32) newErrors.language = 'Language cannot exceed 32 characters';
         else delete newErrors.language;
         break;
       case 'gender':
@@ -210,24 +209,32 @@ const SignUp = () => {
               <p id="phone-error" className="text-red-500 text-sm mt-1 animate-fade-in">{errors.phone}</p>
             )}
           </div>
+
           <div>
-            <label htmlFor="language" className="block text-sm font-medium text-gray-700">Language</label>
-            <input
+            <label htmlFor="language" className="block text-sm font-medium text-gray-700">
+              Language
+            </label>
+            <select
               id="language"
-              type="text"
               name="language"
               value={formData.language}
               onChange={handleChange}
               required
-              className="mt-1 block w-full p-3 bg-transparent border border-gray-300 rounded-lg focus:ring-1 focus:ring-gray-400 focus:border-gray-400 placeholder-gray-500 transition-all duration-200 hover:border-gray-400 focus:scale-[1.01]"
-              placeholder="Preferred language"
+              className="mt-1 block w-full p-3 bg-transparent border border-gray-300 rounded-lg focus:ring-1 focus:ring-gray-400 focus:border-gray-400 text-gray-700 placeholder-gray-500 transition-all duration-200 hover:border-gray-400 focus:scale-[1.01]"
               aria-invalid={errors.language ? 'true' : 'false'}
               aria-describedby={errors.language ? 'language-error' : undefined}
-            />
+            >
+              <option value="" className="text-gray-500">Select Language</option>
+              <option value="English">English</option>
+              <option value="French">French</option>
+            </select>
             {errors.language && (
-              <p id="language-error" className="text-red-500 text-sm mt-1 animate-fade-in">{errors.language}</p>
+              <p id="language-error" className="text-red-500 text-sm mt-1 animate-fade-in">
+                {errors.language}
+              </p>
             )}
           </div>
+
           <div>
             <label htmlFor="gender" className="block text-sm font-medium text-gray-700">Gender</label>
             <select
