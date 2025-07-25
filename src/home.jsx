@@ -33,6 +33,11 @@ const Home = () => {
 
   const { transcript, interimTranscript, finalTranscript, resetTranscript, listening } = useSpeechRecognition();
 
+  // Check for SpeechRecognition support explicitly
+  const isSpeechRecognitionSupported = () => {
+    return !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+  };
+
   const generateUniqueId = () => {
     return `msg-${messageIdCounter.current++}`;
   };
@@ -84,7 +89,7 @@ const Home = () => {
       };
       audio.onended = () => {
         console.log('Audio playback ended, wasListening:', wasListeningRef.current);
-        if (wasListeningRef.current && networkStatus === 'online') {
+        if (wasListeningRef.current && networkStatus === 'online' && isSpeechRecognitionSupported()) {
           setIsListening(true);
           setIsMicInput(true);
           try {
@@ -114,7 +119,12 @@ const Home = () => {
 
   const requestMicrophonePermission = async () => {
     try {
-      // Request microphone access to trigger browser prompt
+      // Ensure HTTPS or localhost for Chrome/Edge
+      if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') {
+        console.error('Microphone access requires HTTPS');
+        setAudioError('Voice input requires a secure connection (HTTPS). Please contact support.');
+        return false;
+      }
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       micStreamRef.current = stream;
       console.log('Microphone permission granted, stream active');
@@ -123,6 +133,8 @@ const Home = () => {
       console.error('Error requesting microphone permission:', error);
       if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
         setAudioError('Microphone access denied. Please enable it in your browser settings or click "Retry".');
+      } else if (error.name === 'NotFoundError') {
+        setAudioError('No microphone found. Please connect a microphone and try again.');
       } else {
         setAudioError(`Failed to access microphone: ${error.message}`);
       }
@@ -138,9 +150,9 @@ const Home = () => {
       return;
     }
 
-    if (!SpeechRecognition.browserSupportsSpeechRecognition()) {
+    if (!isSpeechRecognitionSupported()) {
       console.log('Browser does not support speech recognition');
-      setAudioError('Your browser does not support speech recognition.');
+      setAudioError('Your browser does not support voice input. Please use Chrome, Edge, or Brave, or type your message.');
       return;
     }
 
@@ -161,6 +173,7 @@ const Home = () => {
         console.log('SpeechRecognition stopped');
       } catch (error) {
         console.error('Error stopping SpeechRecognition:', error);
+        setAudioError('Failed to stop microphone. Please try again.');
       }
 
       if (silenceTimerRef.current) {
@@ -169,7 +182,7 @@ const Home = () => {
         console.log('Silence timer cleared');
       }
     } else {
-      // Request microphone permission to trigger prompt
+      // Request microphone permission
       const hasPermission = await requestMicrophonePermission();
       if (!hasPermission) {
         return;
@@ -183,6 +196,11 @@ const Home = () => {
       resetTranscript();
       
       try {
+        // Explicitly set SpeechRecognition for Chrome
+        const SpeechRecognitionImpl = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognitionImpl) {
+          throw new Error('SpeechRecognition API not found');
+        }
         SpeechRecognition.startListening({ 
           continuous: true, 
           interimResults: true, 
@@ -191,7 +209,7 @@ const Home = () => {
         console.log('SpeechRecognition started');
       } catch (error) {
         console.error('Error starting SpeechRecognition:', error);
-        setAudioError('Failed to start microphone. Please try again.');
+        setAudioError('Failed to start voice input. Please try again or use a different browser.');
         setIsListening(false);
         setIsMicInput(false);
         if (micStreamRef.current) {
@@ -226,7 +244,7 @@ const Home = () => {
       },
     })
       .then((res) => {
-        console.log('Success fetching messages for conversationId:', res.status);
+        console.log('Fetch response status:', res.status);
         if (!res.ok) {
           throw new Error(`Failed to fetch messages: ${res.status}`);
         }
@@ -265,7 +283,7 @@ const Home = () => {
   }, [messages]);
 
   useEffect(() => {
-    if (finalTranscript?.trim()) {
+    if (finalTranscript.trim()) {
       console.log('Final transcript received:', finalTranscript);
       if (silenceTimerRef.current) {
         clearTimeout(silenceTimerRef.current);
@@ -273,15 +291,15 @@ const Home = () => {
       silenceTimerRef.current = setTimeout(() => {
         handleSendMessage(finalTranscript.trim());
         resetTranscript();
-        if (isListening && networkStatus === 'online') {
+        if (isListening && networkStatus === 'online' && isSpeechRecognitionSupported()) {
           try {
             SpeechRecognition.startListening({ continuous: true, interimResults: true, language: user?.language || 'en-US' });
             console.log('SpeechRecognition restarted after sending message');
           } catch (error) {
             console.error('Error restarting SpeechRecognition:', error);
-            setAudioError('Failed to restart microphone. Please try again.');
+            setAudioError('Failed to restart voice input. Please try again.');
             setIsListening(false);
-            setIsMicInput(null);
+            setIsMicInput(false);
             if (micStreamRef.current) {
               micStreamRef.current.getTracks().forEach(track => track.stop());
               micStreamRef.current = null;
@@ -294,12 +312,12 @@ const Home = () => {
 
   useEffect(() => {
     const handleNetworkChange = () => {
-      setNetworkStatus(navigator.onLine ? 'Stable' : 'Unstable');
+      setNetworkStatus(navigator.onLine ? 'online' : 'offline');
       if (!navigator.onLine && isListening) {
         setIsListening(false);
-        setIsMicInput(null);
+        setIsMicInput(false);
         setStatus('');
-        setShowStatus(null);
+        setShowStatus(false);
         resetTranscript();
         try {
           SpeechRecognition.stopListening();
@@ -316,7 +334,7 @@ const Home = () => {
           clearTimeout(silenceTimerRef.current);
           silenceTimerRef.current = null;
         }
-        setAudioError('No internet connection. Please try again.');
+        setAudioError('No internet connection. Voice input requires an active connection.');
         console.log('Mic stopped due to offline status');
       }
     };
@@ -337,7 +355,7 @@ const Home = () => {
             micStreamRef.current.getTracks().forEach(track => track.stop());
             micStreamRef.current = null;
           }
-          console.log('SpeechRecognition and microphone stream stopped on unmount');
+          console.log('SpeechRecognition and mic stream stopped on unmount');
         } catch (error) {
           console.error('Error stopping SpeechRecognition on unmount:', error);
         }
@@ -353,7 +371,7 @@ const Home = () => {
       setMessages((prev) => [...prev, {
         id: generateUniqueId(),
         text: 'Please sign in to send messages.',
-        isUser: true,
+        isUser: false,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       }]);
       if (isMicInput) {
@@ -368,8 +386,7 @@ const Home = () => {
       isUser: true,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     };
-
-    console.log('Sending user message: ', newMessage);
+    console.log('Sent user message: ', newMessage);
     setMessages((prev) => [...prev, newMessage]);
 
     setStatus('framing...');
@@ -448,7 +465,7 @@ const Home = () => {
           setAudioError('Failed to connect to server for audio response');
         }
       });
-    setIsMicInput(null);
+    setIsMicInput(false);
   };
 
   return (
@@ -502,17 +519,32 @@ const Home = () => {
               <div className="px-4 text-red-500 text-sm mb-4 flex flex-col items-center">
                 {audioError}
                 {audioError.includes('Microphone access denied') && (
-                  <button
-                    onClick={handleToggleListening}
-                    className="mt-2 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
-                  >
-                    Retry Microphone Access
-                  </button>
+                  <div className="mt-2 flex flex-col items-center">
+                    <button
+                      onClick={handleToggleListening}
+                      className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+                    >
+                      Retry Microphone Access
+                    </button>
+                    <a
+                      href="https://support.google.com/chrome/answer/114662?hl=en"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-2 text-blue-500 underline"
+                    >
+                      Learn how to enable microphone in browser settings
+                    </a>
+                  </div>
+                )}
+                {audioError.includes('Your browser does not support voice input') && (
+                  <p className="mt-2 text-blue-500">
+                    Try using Google Chrome or Microsoft Edge for voice input.
+                  </p>
                 )}
               </div>
             )}
             
-            <div className="flex-1 space-y-2 overflow-y-auto overflow-x-hidden overscroll-y-contain scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-transparent px-1">
+            <div className="flex-1 space-y-4 overflow-y-auto overflow-x-hidden overscroll-y-contain scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-transparent px-1">
               <div className="w-full max-w-full">
                 {messages.map((message) => (
                   <div key={message.id} className="w-full max-w-full mb-4">
@@ -532,10 +564,10 @@ const Home = () => {
         {isListening ? (
           <div className={`fixed bottom-0 left-0 right-0 h-1/3 ${isDarkMode ? 'bg-gray-800' : 'bg-white'} border-t ${isDarkMode ? 'border-gray-700' : 'border-gray-200'} rounded-t-xl transition-transform duration-300 ease-in-out transform translate-y-0 z-50`}>
             <div className="flex flex-col items-center justify-center h-full px-2 sm:px-4">
-              {networkStatus === 'Unstable' && (
+              {networkStatus === 'offline' && (
                 <div className="flex items-center text-red-500 mb-2">
-                  <WifiOff className="w-5 h-5 ms-3" />
-                  <p className="text-sm font-medium">No internet connection. Please try an active connection.</p>
+                  <WifiOff className="w-5 h-5 mr-2" />
+                  <p className="text-sm font-medium">No internet connection. Voice input requires an active connection.</p>
                 </div>
               )}
               <div className="ripple-container">
@@ -545,11 +577,11 @@ const Home = () => {
                 <Mic className={`w-12 h-12 ${isDarkMode ? 'text-blue-400' : 'text-blue-500'} ${listening ? '' : 'opacity-50'}`} />
               </div>
               <p className={`mt-4 text-lg font-medium ${isDarkMode ? 'text-gray-200' : 'text-gray-800'} text-center max-w-full overflow-hidden text-ellipsis`}>
-                {transcript || (status === 'available' ? 'Listening...' : 'Processing...')}
+                {transcript || (status === 'listening' ? 'Listening...' : 'Processing...')}
               </p>
               <button
                 onClick={handleToggleListening}
-                className={`mt-4 p-2 rounded-full border-2 border-red-500 ${isDarkMode ? 'text-red-400 hover:text-white active:text-white' : 'text-red-600 hover:text-white active:text-white'} hover:bg-red-500 active:bg-red-600 transition-colors`}
+                className={`mt-4 p-2 rounded-full border-2 border-red-500 ${isDarkMode ? 'text-red-400 hover:text-white active:text-white' : 'text-red-500 hover:text-white active:text-white'} hover:bg-red-500 active:bg-red-500 transition-colors`}
                 aria-label="Stop listening"
               >
                 <X className="w-6 h-6" />
