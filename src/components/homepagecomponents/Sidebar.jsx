@@ -107,7 +107,7 @@ const Sidebar = ({ isOpen, onClose, isDarkMode }) => {
               <div className="flex items-center space-x-2 mb-1">
                 <Phone className="w-4 h-4 text-purple-500" />
                 <span className={`text-sm font-medium ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
-                  Language
+                  Language : {user ? user.language : 'en'}
                 </span>
               </div>
             </div>
