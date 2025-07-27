@@ -119,7 +119,7 @@ const SignIn = () => {
           </div>
           <button
             type="submit"
-            className="w-full bg-transparent border border-gray-300 text-gray-800 p-3 rounded-lg hover:border-gray-400 hover:text-gray-900 transition-all duration-200 disabled:border-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed"
+            className="w-full bg-transparent text-blue border border-gray-300 text-gray-800 p-3 rounded-lg hover:border-gray-400 hover:text-gray-900 transition-all duration-200 disabled:border-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed"
             disabled={Object.keys(errors).length > 0}
           >
             Sign In
