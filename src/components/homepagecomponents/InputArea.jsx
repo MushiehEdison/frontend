@@ -102,7 +102,7 @@ const InputArea = ({ onSendMessage, isListening, onToggleListening, isDarkMode }
         <div className="max-w-4xl mx-auto">
           <div className="flex items-center space-x-2">
             <div className="flex-1 relative">
-              <textarea
+              <input
                 ref={textareaRef}
                 value={message}
                 onChange={handleInputChange}
