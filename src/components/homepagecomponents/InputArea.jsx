@@ -1,9 +1,46 @@
-import React, { useState, useRef } from 'react';
-import { Mic, Send, Smile } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Mic, Send } from 'lucide-react';
 
 const InputArea = ({ onSendMessage, isListening, onToggleListening, isDarkMode }) => {
   const [message, setMessage] = useState('');
   const textareaRef = useRef(null);
+  const containerRef = useRef(null);
+
+  // Detect Android for Enter key behavior
+  const isAndroid = /Android/i.test(navigator.userAgent);
+
+  // Handle keyboard visibility
+  useEffect(() => {
+    const handleKeyboard = () => {
+      if (!containerRef.current) return;
+      
+      // Use visualViewport to detect keyboard height
+      const viewport = window.visualViewport;
+      if (viewport) {
+        const keyboardHeight = window.innerHeight - viewport.height;
+        // Adjust container position
+        containerRef.current.style.bottom = `${keyboardHeight}px`;
+        // Ensure smooth transition
+        containerRef.current.style.transition = 'bottom 0.2s ease-in-out';
+      }
+    };
+
+    // Fallback for browsers without visualViewport
+    const handleResize = () => {
+      if (!containerRef.current) return;
+      // Approximate keyboard height (adjust as needed)
+      const keyboardHeight = window.innerHeight - document.documentElement.clientHeight;
+      containerRef.current.style.bottom = `${keyboardHeight > 0 ? keyboardHeight : 0}px`;
+    };
+
+    window.visualViewport?.addEventListener('resize', handleKeyboard);
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      window.visualViewport?.removeEventListener('resize', handleKeyboard);
+      window.removeEventListener('resize', handleResize);
+    };
+  }, []);
 
   const handleSend = () => {
     if (message.trim()) {
@@ -12,7 +49,6 @@ const InputArea = ({ onSendMessage, isListening, onToggleListening, isDarkMode }
       if (textareaRef.current) {
         textareaRef.current.style.height = 'auto';
       }
-      // Haptic feedback (if supported)
       if (navigator.vibrate) navigator.vibrate(50);
     }
   };
@@ -20,7 +56,11 @@ const InputArea = ({ onSendMessage, isListening, onToggleListening, isDarkMode }
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      handleSend();
+      if (!isAndroid) {
+        // Non-Android: Enter sends message
+        handleSend();
+      }
+      // Android: Enter adds new line (handled by default textarea behavior)
     }
   };
 
@@ -45,7 +85,7 @@ const InputArea = ({ onSendMessage, isListening, onToggleListening, isDarkMode }
             display: none;
           }
           .input-container {
-            transition: all 0.2s ease-in-out;
+            transition: bottom 0.2s ease-in-out;
           }
           .button-transition {
             transition: all 0.2s ease-in-out;
@@ -55,16 +95,12 @@ const InputArea = ({ onSendMessage, isListening, onToggleListening, isDarkMode }
           }
         `}
       </style>
-      <div className={`fixed bottom-0 left-0 right-0 ${isDarkMode ? 'bg-gray-800' : 'bg-white'} border-t border-gray-200 p-3 shadow-lg input-container`}>
+      <div
+        ref={containerRef}
+        className={`fixed bottom-0 left-0 right-0 ${isDarkMode ? 'bg-gray-800' : 'bg-white'} border-t border-gray-200 p-3 shadow-lg input-container`}
+      >
         <div className="max-w-4xl mx-auto">
           <div className="flex items-center space-x-2">
-            {/* Left Icon (non-functional to maintain current functionality) */}
-            <button
-              className={`p-2 rounded-full ${isDarkMode ? 'text-gray-400' : 'text-gray-500'} hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors`}
-              aria-label="Open emoji picker"
-            >
-              <Smile className="w-6 h-6" />
-            </button>
             <div className="flex-1 relative">
               <textarea
                 ref={textareaRef}
