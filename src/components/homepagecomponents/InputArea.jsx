@@ -4,41 +4,28 @@ import { Mic, Send } from 'lucide-react';
 const InputArea = ({ onSendMessage, isListening, onToggleListening, isDarkMode }) => {
   const [message, setMessage] = useState('');
   const textareaRef = useRef(null);
-  const containerRef = useRef(null);
+  const initialHeight = useRef(window.innerHeight);
 
   // Detect Android for Enter key behavior
   const isAndroid = /Android/i.test(navigator.userAgent);
 
   // Handle keyboard visibility
   useEffect(() => {
-    const handleKeyboard = () => {
-      if (!containerRef.current) return;
-      
-      // Use visualViewport to detect keyboard height
-      const viewport = window.visualViewport;
-      if (viewport) {
-        const keyboardHeight = window.innerHeight - viewport.height;
-        // Adjust container position
-        containerRef.current.style.bottom = `${keyboardHeight}px`;
-        // Ensure smooth transition
-        containerRef.current.style.transition = 'bottom 0.2s ease-in-out';
+    const handleResize = () => {
+      const keyboardHeight = initialHeight.current - window.innerHeight;
+      if (keyboardHeight > 0) {
+        // Keyboard is visible, add padding to push content up
+        document.body.style.paddingBottom = `${keyboardHeight}px`;
+      } else {
+        // Keyboard is hidden, reset padding
+        document.body.style.paddingBottom = '0';
       }
     };
 
-    // Fallback for browsers without visualViewport
-    const handleResize = () => {
-      if (!containerRef.current) return;
-      // Approximate keyboard height (adjust as needed)
-      const keyboardHeight = window.innerHeight - document.documentElement.clientHeight;
-      containerRef.current.style.bottom = `${keyboardHeight > 0 ? keyboardHeight : 0}px`;
-    };
-
-    window.visualViewport?.addEventListener('resize', handleKeyboard);
     window.addEventListener('resize', handleResize);
-
     return () => {
-      window.visualViewport?.removeEventListener('resize', handleKeyboard);
       window.removeEventListener('resize', handleResize);
+      document.body.style.paddingBottom = '0'; // Cleanup on unmount
     };
   }, []);
 
@@ -60,7 +47,7 @@ const InputArea = ({ onSendMessage, isListening, onToggleListening, isDarkMode }
         // Non-Android: Enter sends message
         handleSend();
       }
-      // Android: Enter adds new line (handled by default textarea behavior)
+      // Android: Enter adds new line (default textarea behavior)
     }
   };
 
@@ -85,7 +72,7 @@ const InputArea = ({ onSendMessage, isListening, onToggleListening, isDarkMode }
             display: none;
           }
           .input-container {
-            transition: bottom 0.2s ease-in-out;
+            transition: all 0.2s ease-in-out;
           }
           .button-transition {
             transition: all 0.2s ease-in-out;
@@ -96,13 +83,12 @@ const InputArea = ({ onSendMessage, isListening, onToggleListening, isDarkMode }
         `}
       </style>
       <div
-        ref={containerRef}
-        className={`fixed bottom-0 left-0 right-0 ${isDarkMode ? 'bg-gray-800' : 'bg-white'} border-t border-gray-200 p-3 shadow-lg input-container`}
+        className={`fixed bottom-0 left-0 right-0 ${isDarkMode ? 'bg-gray-800' : 'bg-white'} border-t border-gray-200 p-3 shadow-lg input-container z-50`}
       >
         <div className="max-w-4xl mx-auto">
           <div className="flex items-center space-x-2">
             <div className="flex-1 relative">
-              <input
+              <textarea
                 ref={textareaRef}
                 value={message}
                 onChange={handleInputChange}
