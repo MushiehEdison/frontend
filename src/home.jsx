@@ -183,7 +183,7 @@ const Home = () => {
       headers: {
         'Authorization': `Bearer ${token}`,
       },
-      credentials: 'include', // Add for GET requests to match CORS settings
+      credentials: 'include',
     })
       .then((res) => {
         console.log('Fetch response status:', res.status);
@@ -316,6 +316,40 @@ const Home = () => {
       return;
     }
 
+    try {
+      const decoded = JSON.parse(atob(token.split('.')[1]));
+      const exp = decoded.exp * 1000;
+      if (Date.now() >= exp) {
+        console.error('Token is expired');
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: generateUniqueId(),
+            text: 'Your session has expired. Please sign in again.',
+            isUser: false,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          },
+        ]);
+        localStorage.removeItem('token');
+        navigate('/signin');
+        return;
+      }
+    } catch (error) {
+      console.error('Invalid token format:', error);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: generateUniqueId(),
+          text: 'Invalid token. Please sign in again.',
+          isUser: false,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        },
+      ]);
+      localStorage.removeItem('token');
+      navigate('/signin');
+      return;
+    }
+
     const newMessage = {
       id: generateUniqueId(),
       text,
@@ -392,17 +426,22 @@ const Home = () => {
         console.log('Setting formatted messages:', formattedMessages);
         setMessages(formattedMessages);
         messageIdCounter.current = formattedMessages.length + 1;
-        if (isMicInput && data.audio) {
-          const cleanText = stripEmojis(
-            data.messages.find(
-              (msg) => !msg.isUser && msg.timestamp === data.messages[data.messages.length - 1].timestamp
-            )?.text
-          );
-          console.log('Playing audio for cleaned text:', cleanText);
-          playAudio(data.audio);
-        } else if (isMicInput && !data.audio) {
-          console.warn('No audio received in response for mic input');
-          setAudioError('No audio response received from server');
+        if (isMicInput) {
+          if (data.audio) {
+            const cleanText = stripEmojis(
+              data.messages.find(
+                (msg) => !msg.isUser && msg.timestamp === data.messages[data.messages.length - 1].timestamp
+              )?.text
+            );
+            console.log('Playing audio for cleaned text:', cleanText);
+            playAudio(data.audio);
+          } else if (data.audio_error) {
+            console.warn('Audio error received from server:', data.audio_error);
+            setAudioError(data.audio_error);
+          } else {
+            console.warn('No audio received in response for mic input');
+            setAudioError('No audio response received from server');
+          }
         }
         if (!isValidId && data.id) {
           console.log('Navigating to new conversation ID:', data.id);
@@ -418,7 +457,7 @@ const Home = () => {
         };
         setMessages((prev) => [...prev, errorResponse]);
         if (isMicInput) {
-          setAudioError('No audio response received from server');
+          setAudioError(data.audio_error || 'No audio response received from server');
         }
       }
     } catch (error) {
