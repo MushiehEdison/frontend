@@ -404,6 +404,39 @@ const Home = () => {
     setIsMicInput(false);
   };
 
+  const updatedStyles = `
+  .ripple-container {
+    position: relative;
+    width: 100px;
+    height: 100px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+  .ripple {
+    position: absolute;
+    border-radius: 50%;
+    background: rgba(59, 130, 246, 0.3);
+    width: 60px;
+    height: 60px;
+    animation: ripple-effect 1.5s infinite ease-out;
+  }
+  .ripple:nth-child(2) { animation-delay: 0.3s; }
+  .ripple:nth-child(3) { animation-delay: 0.6s; }
+  @keyframes ripple-effect {
+    0% { transform: scale(0); opacity: 0.8; }
+    100% { transform: scale(2); opacity: 0; }
+  }
+  .safe-area-pb {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  /* Improved listening overlay */
+  .listening-overlay {
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+  }
+`;
+
   return (
     <ChatContext.Provider value={{ resetMessages }}>
       <div className={`min-h-[100dvh] ${isDarkMode ? 'bg-gray-900' : 'bg-gray-50'} transition-colors duration-300 flex flex-col`}>
@@ -508,6 +541,8 @@ const Home = () => {
               isListening={isListening}
               onToggleListening={handleToggleListening}
               isDarkMode={isDarkMode}
+              transcript={transcript}
+              interimTranscript={interimTranscript}
             />
           </div>
         )}
