@@ -122,7 +122,6 @@ const Home = () => {
       setShowStatus(false);
       resetTranscript();
       
-      // Ensure SpeechRecognition is fully stopped
       try {
         SpeechRecognition.stopListening();
         SpeechRecognition.abortListening();
@@ -137,7 +136,6 @@ const Home = () => {
         console.error('Error stopping SpeechRecognition:', error);
       }
 
-      // Clear any pending timers
       if (silenceTimerRef.current) {
         clearTimeout(silenceTimerRef.current);
         silenceTimerRef.current = null;
@@ -153,7 +151,6 @@ const Home = () => {
       setShowStatus(true);
       resetTranscript();
       
-      // Initialize new SpeechRecognition instance
       speechRecognitionRef.current = SpeechRecognition.getRecognition();
       SpeechRecognition.startListening({ 
         continuous: true, 
@@ -186,6 +183,7 @@ const Home = () => {
       headers: {
         'Authorization': `Bearer ${token}`,
       },
+      credentials: 'include', // Add for GET requests to match CORS settings
     })
       .then((res) => {
         console.log('Fetch response status:', res.status);
@@ -281,7 +279,6 @@ const Home = () => {
       if (silenceTimerRef.current) {
         clearTimeout(silenceTimerRef.current);
       }
-      // Cleanup SpeechRecognition on component unmount
       if (isListening) {
         try {
           SpeechRecognition.stopListening();
@@ -299,17 +296,20 @@ const Home = () => {
     };
   }, [isListening]);
 
-  const handleSendMessage = (text) => {
+  const handleSendMessage = async (text) => {
     console.log('handleSendMessage called with text:', text, 'isMicInput:', isMicInput);
     const token = localStorage.getItem('token');
     if (!token) {
       console.error('No token found in localStorage');
-      setMessages((prev) => [...prev, {
-        id: generateUniqueId(),
-        text: 'Please sign in to send messages.',
-        isUser: false,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      }]);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: generateUniqueId(),
+          text: 'Please sign in to send messages.',
+          isUser: false,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        },
+      ]);
       if (isMicInput) {
         setAudioError('Please sign in to use server');
       }
@@ -329,113 +329,146 @@ const Home = () => {
     setShowStatus(true);
 
     const isValidId = conversationId && /^\d+$/.test(conversationId);
-    const url = isValidId 
-      ? `https://backend-b5jw.onrender.com/api/auth/conversation-${conversationId}`
+    const url = isValidId
+      ? `https://backend-b5jw.onrender.com/api/auth/conversation/${conversationId}`
       : 'https://backend-b5jw.onrender.com/api/auth/conversation';
 
     console.log('Sending POST request to:', url, 'with body:', { message: text, isMicInput });
-    fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-      },
-      body: JSON.stringify({ message: text, isMicInput }),
-    })
-      .then((res) => {
-        console.log('POST response status:', res.status);
-        if (!res.ok) {
-          throw new Error(`Failed to send message: ${res.status} ${res.statusText}`);
+
+    const maxRetries = 3;
+    let attempt = 0;
+    let response;
+
+    while (attempt < maxRetries) {
+      try {
+        response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          credentials: 'include',
+          body: JSON.stringify({ message: text, isMicInput }),
+        });
+
+        console.log('POST response status:', response.status);
+        if (!response.ok) {
+          throw new Error(`Failed to send message: ${response.status} ${response.statusText}`);
         }
-        return res.json();
-      })
-      .then((data) => {
-        console.log('POST response data:', data);
-        setShowStatus(false);
-        if (data.messages && Array.isArray(data.messages)) {
-          const formattedMessages = data.messages.map((msg, index) => ({
-            ...msg,
-            id: msg.id || `msg-${index + 1}`,
-            timestamp: msg.timestamp || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          }));
-          console.log('Setting formatted messages:', formattedMessages);
-          setMessages(formattedMessages);
-          messageIdCounter.current = formattedMessages.length + 1;
-          if (isMicInput && data.audio) {
-            const cleanText = stripEmojis(data.messages.find(msg => !msg.isUser && msg.timestamp === data.messages[data.messages.length - 1].timestamp)?.text);
-            console.log('Playing audio for cleaned text:', cleanText);
-            playAudio(data.audio);
-          } else if (isMicInput && !data.audio) {
-            console.warn('No audio received in response for mic input');
-            setAudioError('No audio response received from server');
-          }
-          if (!isValidId && data.id) {
-            console.log('Navigating to new conversation ID:', data.id);
-            navigate(`/chat/${data.id}`);
-          }
-        } else {
-          console.error('No valid messages in response:', data);
+        break;
+      } catch (error) {
+        attempt++;
+        console.error(`Attempt ${attempt} failed:`, error);
+        if (attempt === maxRetries) {
+          console.error('Max retries reached, giving up');
+          setShowStatus(false);
           const errorResponse = {
             id: generateUniqueId(),
-            text: 'I apologize, but I encountered an issue processing your request. Please try again.',
+            text: `Failed to connect to server: ${error.message}. Your message was sent but not saved. Please try again.`,
             isUser: false,
             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           };
           setMessages((prev) => [...prev, errorResponse]);
           if (isMicInput) {
-            setAudioError('No audio response received from server');
+            setAudioError('Failed to connect to server for audio response');
           }
+          setIsMicInput(false);
+          return;
         }
-      })
-      .catch((error) => {
-        console.error('Error sending message:', error);
-        setShowStatus(false);
+        await new Promise((resolve) => setTimeout(resolve, Math.pow(2, attempt) * 1000));
+      }
+    }
+
+    try {
+      const data = await response.json();
+      console.log('POST response data:', data);
+      setShowStatus(false);
+      if (data.messages && Array.isArray(data.messages)) {
+        const formattedMessages = data.messages.map((msg, index) => ({
+          ...msg,
+          id: msg.id || `msg-${index + 1}`,
+          timestamp: msg.timestamp || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        }));
+        console.log('Setting formatted messages:', formattedMessages);
+        setMessages(formattedMessages);
+        messageIdCounter.current = formattedMessages.length + 1;
+        if (isMicInput && data.audio) {
+          const cleanText = stripEmojis(
+            data.messages.find(
+              (msg) => !msg.isUser && msg.timestamp === data.messages[data.messages.length - 1].timestamp
+            )?.text
+          );
+          console.log('Playing audio for cleaned text:', cleanText);
+          playAudio(data.audio);
+        } else if (isMicInput && !data.audio) {
+          console.warn('No audio received in response for mic input');
+          setAudioError('No audio response received from server');
+        }
+        if (!isValidId && data.id) {
+          console.log('Navigating to new conversation ID:', data.id);
+          navigate(`/chat/${data.id}`);
+        }
+      } else {
+        console.error('No valid messages in response:', data);
         const errorResponse = {
           id: generateUniqueId(),
-          text: `Failed to connect to server: ${error.message}. Your message was sent but not saved. Please try again.`,
+          text: 'I apologize, but I encountered an issue processing your request. Please try again.',
           isUser: false,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         };
         setMessages((prev) => [...prev, errorResponse]);
         if (isMicInput) {
-          setAudioError('Failed to connect to server for audio response');
+          setAudioError('No audio response received from server');
         }
-      });
+      }
+    } catch (error) {
+      console.error('Error parsing response:', error);
+      setShowStatus(false);
+      const errorResponse = {
+        id: generateUniqueId(),
+        text: `Failed to connect to server: ${error.message}. Your message was sent but not saved. Please try again.`,
+        isUser: false,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      };
+      setMessages((prev) => [...prev, errorResponse]);
+      if (isMicInput) {
+        setAudioError('Failed to connect to server for audio response');
+      }
+    }
     setIsMicInput(false);
   };
 
   const updatedStyles = `
-  .ripple-container {
-    position: relative;
-    width: 100px;
-    height: 100px;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-  }
-  .ripple {
-    position: absolute;
-    border-radius: 50%;
-    background: rgba(59, 130, 246, 0.3);
-    width: 60px;
-    height: 60px;
-    animation: ripple-effect 1.5s infinite ease-out;
-  }
-  .ripple:nth-child(2) { animation-delay: 0.3s; }
-  .ripple:nth-child(3) { animation-delay: 0.6s; }
-  @keyframes ripple-effect {
-    0% { transform: scale(0); opacity: 0.8; }
-    100% { transform: scale(2); opacity: 0; }
-  }
-  .safe-area-pb {
-    padding-bottom: env(safe-area-inset-bottom);
-  }
-  /* Improved listening overlay */
-  .listening-overlay {
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-  }
-`;
+    .ripple-container {
+      position: relative;
+      width: 100px;
+      height: 100px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    .ripple {
+      position: absolute;
+      border-radius: 50%;
+      background: rgba(59, 130, 246, 0.3);
+      width: 60px;
+      height: 60px;
+      animation: ripple-effect 1.5s infinite ease-out;
+    }
+    .ripple:nth-child(2) { animation-delay: 0.3s; }
+    .ripple:nth-child(3) { animation-delay: 0.6s; }
+    @keyframes ripple-effect {
+      0% { transform: scale(0); opacity: 0.8; }
+      100% { transform: scale(2); opacity: 0; }
+    }
+    .safe-area-pb {
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+    .listening-overlay {
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+    }
+  `;
 
   return (
     <ChatContext.Provider value={{ resetMessages }}>
