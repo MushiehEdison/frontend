@@ -70,7 +70,6 @@ const Home = () => {
         if (isListening) {
           wasListeningRef.current = true;
           setIsListening(false);
-          setIsMicInput(false);
           SpeechRecognition.stopListening();
           SpeechRecognition.abortListening();
           console.log('Mic stopped during audio playback');
@@ -82,7 +81,6 @@ const Home = () => {
         console.log('Audio playback ended, wasListening:', wasListeningRef.current);
         if (wasListeningRef.current && networkStatus === 'online') {
           setIsListening(true);
-          setIsMicInput(true);
           SpeechRecognition.startListening({ continuous: true, interimResults: true, language: user?.language || 'en-US' });
           console.log('Mic restarted after audio playback');
         }
@@ -231,6 +229,7 @@ const Home = () => {
         clearTimeout(silenceTimerRef.current);
       }
       silenceTimerRef.current = setTimeout(() => {
+        setIsMicInput(true); // Ensure isMicInput is true for voice inputs
         handleSendMessage(finalTranscript.trim());
         resetTranscript();
         if (isListening && networkStatus === 'online') {
@@ -406,7 +405,6 @@ const Home = () => {
           if (isMicInput) {
             setAudioError('Failed to connect to server for audio response. Please try again.');
           }
-          setIsMicInput(false);
           return;
         }
         await new Promise((resolve) => setTimeout(resolve, Math.pow(2, attempt) * 1000));
@@ -471,7 +469,6 @@ const Home = () => {
         setAudioError('Failed to connect to server for audio response. Please try again or type your message.');
       }
     }
-    setIsMicInput(false);
   };
 
   const updatedStyles = `
