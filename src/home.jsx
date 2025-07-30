@@ -59,7 +59,7 @@ const Home = () => {
   const playAudio = (base64Audio) => {
     if (!base64Audio) {
       console.warn('No audio data to play');
-      setAudioError('No audio data received. Please try again.');
+      setAudioError('No audio data received. Displaying text response.');
       return;
     }
     try {
@@ -87,15 +87,15 @@ const Home = () => {
       };
       audio.onerror = (error) => {
         console.error('Audio playback error:', error);
-        setAudioError('Failed to play audio response. Please try again.');
+        setAudioError('Failed to play audio response. Displaying text response.');
       };
       audio.play().catch(error => {
         console.error('Error playing audio:', error);
-        setAudioError('Failed to play audio response. Please try again.');
+        setAudioError('Failed to play audio response. Displaying text response.');
       });
     } catch (error) {
       console.error('Error setting up audio:', error);
-      setAudioError('Error setting up audio playback. Please try again.');
+      setAudioError('Error setting up audio playback. Displaying text response.');
     }
   };
 
@@ -224,7 +224,7 @@ const Home = () => {
 
   useEffect(() => {
     if (finalTranscript.trim()) {
-      console.log('Final transcript received:', finalTranscript);
+      console.log('Final transcript received:', finalTranscript, 'isMicInput:', isMicInput);
       if (silenceTimerRef.current) {
         clearTimeout(silenceTimerRef.current);
       }
@@ -295,8 +295,8 @@ const Home = () => {
     };
   }, [isListening]);
 
-  const handleSendMessage = async (text) => {
-    console.log('handleSendMessage called with text:', text, 'isMicInput:', isMicInput);
+  const handleSendMessage = async (text, retryCount = 0) => {
+    console.log('handleSendMessage called with text:', text, 'isMicInput:', isMicInput, 'retryCount:', retryCount);
     const token = localStorage.getItem('token');
     if (!token) {
       console.error('No token found in localStorage');
@@ -355,7 +355,7 @@ const Home = () => {
       isUser: true,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     };
-    console.log('Sent user message: ', newMessage);
+    console.log('Sent user message:', newMessage);
     setMessages((prev) => [...prev, newMessage]);
 
     setStatus('framing...');
@@ -369,49 +369,22 @@ const Home = () => {
     console.log('Sending POST request to:', url, 'with body:', { message: text, isMicInput });
 
     const maxRetries = 3;
-    let attempt = 0;
-    let response;
-
-    while (attempt < maxRetries) {
-      try {
-        response = await fetch(url, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-          },
-          credentials: 'include',
-          body: JSON.stringify({ message: text, isMicInput }),
-        });
-
-        console.log('POST response status:', response.status);
-        if (!response.ok) {
-          throw new Error(`Failed to send message: ${response.status} ${response.statusText}`);
-        }
-        break;
-      } catch (error) {
-        attempt++;
-        console.error(`Attempt ${attempt} failed:`, error);
-        if (attempt === maxRetries) {
-          console.error('Max retries reached, giving up');
-          setShowStatus(false);
-          const errorResponse = {
-            id: generateUniqueId(),
-            text: `Failed to connect to server: ${error.message}. Your message was sent but not saved. Please try again.`,
-            isUser: false,
-            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          };
-          setMessages((prev) => [...prev, errorResponse]);
-          if (isMicInput) {
-            setAudioError('Failed to connect to server for audio response. Please try again.');
-          }
-          return;
-        }
-        await new Promise((resolve) => setTimeout(resolve, Math.pow(2, attempt) * 1000));
-      }
-    }
-
     try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        credentials: 'include',
+        body: JSON.stringify({ message: text, isMicInput }),
+      });
+
+      console.log('POST response status:', response.status);
+      if (!response.ok) {
+        throw new Error(`Failed to send message: ${response.status} ${response.statusText}`);
+      }
+
       const data = await response.json();
       console.log('POST response data:', data);
       setShowStatus(false);
@@ -433,9 +406,18 @@ const Home = () => {
             );
             console.log('Playing audio for cleaned text:', cleanText);
             playAudio(data.audio);
+          } else if (retryCount < maxRetries) {
+            console.warn(`No audio received, retrying (${retryCount + 1}/${maxRetries})`);
+            setTimeout(() => handleSendMessage(text, retryCount + 1), 1000 * (retryCount + 1));
+            return;
           } else {
-            console.warn('No audio received in response for mic input, error:', data.audio_error || 'None');
-            setAudioError(data.audio_error || 'Voice response unavailable. Please try again or type your message.');
+            console.warn('No audio received after max retries, falling back to text');
+            setAudioError(data.audio_error || 'Voice response unavailable. Displaying text response.');
+            // Ensure the AI response is displayed
+            const aiResponse = data.messages.find((msg) => !msg.isUser && msg.timestamp === data.messages[data.messages.length - 1].timestamp);
+            if (aiResponse && aiResponse.text) {
+              setMessages((prev) => [...prev.filter((m) => m.id !== newMessage.id), ...formattedMessages]);
+            }
           }
         }
         if (!isValidId && data.id) {
@@ -452,11 +434,17 @@ const Home = () => {
         };
         setMessages((prev) => [...prev, errorResponse]);
         if (isMicInput) {
-          setAudioError(data.audio_error || 'Voice response unavailable. Please try again or type your message.');
+          setAudioError(data.audio_error || 'Voice response unavailable. Displaying text response.');
         }
       }
     } catch (error) {
-      console.error('Error parsing response:', error);
+      console.error('Error during POST request:', error);
+      if (retryCount < maxRetries) {
+        console.warn(`Request failed, retrying (${retryCount + 1}/${maxRetries})`);
+        setTimeout(() => handleSendMessage(text, retryCount + 1), 1000 * (retryCount + 1));
+        return;
+      }
+      console.error('Max retries reached, giving up');
       setShowStatus(false);
       const errorResponse = {
         id: generateUniqueId(),
@@ -466,7 +454,7 @@ const Home = () => {
       };
       setMessages((prev) => [...prev, errorResponse]);
       if (isMicInput) {
-        setAudioError('Failed to connect to server for audio response. Please try again or type your message.');
+        setAudioError('Failed to connect to server for audio response. Displaying text response.');
       }
     }
   };
@@ -506,32 +494,7 @@ const Home = () => {
   return (
     <ChatContext.Provider value={{ resetMessages }}>
       <div className={`min-h-[100dvh] ${isDarkMode ? 'bg-gray-900' : 'bg-gray-50'} transition-colors duration-300 flex flex-col`}>
-        <style>
-          {`
-            .ripple-container {
-              position: relative;
-              width: 100px;
-              height: 100px;
-              display: flex;
-              justify-content: center;
-              align-items: center;
-            }
-            .ripple {
-              position: absolute;
-              border-radius: 50%;
-              background: rgba(59, 130, 246, 0.3);
-              width: 60px;
-              height: 60px;
-              animation: ripple-effect 1.5s infinite ease-out;
-            }
-            .ripple:nth-child(2) { animation-delay: 0.3s; }
-            .ripple:nth-child(3) { animation-delay: 0.6s; }
-            @keyframes ripple-effect {
-              0% { transform: scale(0); opacity: 0.8; }
-              100% { transform: scale(2); opacity: 0; }
-            }
-          `}
-        </style>
+        <style>{updatedStyles}</style>
 
         <Navbar 
           isDarkMode={isDarkMode}
