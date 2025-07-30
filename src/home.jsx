@@ -89,15 +89,15 @@ const Home = () => {
       };
       audio.onerror = (error) => {
         console.error('Audio playback error:', error);
-        setAudioError('Failed to play audio response');
+        setAudioError('Failed to play audio response. Please try again.');
       };
       audio.play().catch(error => {
         console.error('Error playing audio:', error);
-        setAudioError('Failed to play audio response');
+        setAudioError('Failed to play audio response. Please try again.');
       });
     } catch (error) {
       console.error('Error setting up audio:', error);
-      setAudioError('Error setting up audio playback');
+      setAudioError('Error setting up audio playback. Please try again.');
     }
   };
 
@@ -311,7 +311,7 @@ const Home = () => {
         },
       ]);
       if (isMicInput) {
-        setAudioError('Please sign in to use server');
+        setAudioError('Please sign in to use voice features.');
       }
       return;
     }
@@ -404,7 +404,7 @@ const Home = () => {
           };
           setMessages((prev) => [...prev, errorResponse]);
           if (isMicInput) {
-            setAudioError('Failed to connect to server for audio response');
+            setAudioError('Failed to connect to server for audio response. Please try again.');
           }
           setIsMicInput(false);
           return;
@@ -435,12 +435,9 @@ const Home = () => {
             );
             console.log('Playing audio for cleaned text:', cleanText);
             playAudio(data.audio);
-          } else if (data.audio_error) {
-            console.warn('Audio error received from server:', data.audio_error);
-            setAudioError(data.audio_error);
           } else {
-            console.warn('No audio received in response for mic input');
-            setAudioError('No audio response received from server');
+            console.warn('No audio received in response for mic input, error:', data.audio_error || 'None');
+            setAudioError(data.audio_error || 'Voice response unavailable. Please try again.');
           }
         }
         if (!isValidId && data.id) {
@@ -457,7 +454,7 @@ const Home = () => {
         };
         setMessages((prev) => [...prev, errorResponse]);
         if (isMicInput) {
-          setAudioError(data.audio_error || 'No audio response received from server');
+          setAudioError(data.audio_error || 'Voice response unavailable. Please try again.');
         }
       }
     } catch (error) {
@@ -471,7 +468,7 @@ const Home = () => {
       };
       setMessages((prev) => [...prev, errorResponse]);
       if (isMicInput) {
-        setAudioError('Failed to connect to server for audio response');
+        setAudioError('Failed to connect to server for audio response. Please try again.');
       }
     }
     setIsMicInput(false);
