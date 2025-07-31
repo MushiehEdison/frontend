@@ -1,17 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   User, 
   X, 
   Edit3, 
   Save, 
   Phone, 
-  Mail, 
   MapPin, 
   Heart, 
   Shield, 
   Calendar,
   AlertCircle,
-  Camera,
   CheckCircle
 } from 'lucide-react';
 
@@ -19,45 +17,70 @@ const EditProfile = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [activeSection, setActiveSection] = useState('personal');
   const [profile, setProfile] = useState({
-    firstName: 'Jean',
-    lastName: 'Mbarga',
-    email: 'jean.mbarga@example.com',
-    phone: '+237 6 12 34 56 78',
-    dateOfBirth: '1990-05-15',
-    gender: 'Male',
-    maritalStatus: 'Married',
-    nationality: 'Cameroonian',
-    region: 'Littoral',
-    city: 'Douala',
-    quarter: 'Bonanjo',
-    address: '123 Rue de Bonanjo, Douala',
-    profession: 'Business Owner',
-    emergencyContact: 'Marie Mbarga',
-    emergencyRelation: 'Wife',
-    emergencyPhone: '+237 6 98 76 54 32',
-    bloodType: 'O+',
-    genotype: 'AA',
-    allergies: 'Penicillin, Shellfish',
-    chronicConditions: 'Hypertension',
-    medications: 'Lisinopril 10mg daily',
-    insuranceProvider: 'CNPS',
-    insuranceNumber: 'CN123456789',
-    primaryHospital: 'Laquintinie Hospital',
-    primaryPhysician: 'Dr. Samuel Enow',
-    medicalHistory: 'Hypertension diagnosed in 2015, Malaria episodes (2018, 2020)',
-    vaccinationHistory: 'BCG, Hepatitis B, Yellow Fever, COVID-19 (2021)',
-    lastDentalVisit: '2023-06-15',
-    lastEyeExam: '2023-03-10',
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: '',
+    dateOfBirth: '',
+    gender: '',
+    maritalStatus: '',
+    nationality: '',
+    region: '',
+    city: '',
+    quarter: '',
+    address: '',
+    profession: '',
+    emergencyContact: '',
+    emergencyRelation: '',
+    emergencyPhone: '',
+    bloodType: '',
+    genotype: '',
+    allergies: '',
+    chronicConditions: '',
+    medications: '',
+    primaryHospital: '',
+    primaryPhysician: '',
+    medicalHistory: '',
+    vaccinationHistory: '',
+    lastDentalVisit: '',
+    lastEyeExam: '',
     lifestyle: {
       smokes: false,
-      alcohol: 'Occasionally',
-      exercise: '3 times weekly',
-      diet: 'Balanced'
+      alcohol: '',
+      exercise: '',
+      diet: ''
     },
-    familyHistory: 'Father: Hypertension, Mother: Diabetes'
+    familyHistory: ''
   });
+  const [editedProfile, setEditedProfile] = useState({ ...profile });
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
 
-  const [editedProfile, setEditedProfile] = useState({...profile});
+  // Fetch profile data on component mount
+  useEffect(() => {
+    const fetchProfile = async () => {
+      try {
+        const response = await fetch('https://backend-b5jw.onrender.com/api/auth/profile', {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        const data = await response.json();
+        if (response.ok) {
+          setProfile(data);
+          setEditedProfile(data);
+          setError('');
+        } else {
+          setError(data.message || 'Failed to load profile');
+        }
+      } catch (err) {
+        setError('Error connecting to the server');
+      }
+    };
+    fetchProfile();
+  }, []);
 
   const handleInputChange = (field, value) => {
     setEditedProfile(prev => ({
@@ -76,14 +99,54 @@ const EditProfile = () => {
     }));
   };
 
-  const handleSave = () => {
-    setProfile(editedProfile);
-    setIsEditing(false);
+  const validateProfile = () => {
+    if (!editedProfile.firstName.trim()) return 'First name is required';
+    if (!editedProfile.lastName.trim()) return 'Last name is required';
+    if (!editedProfile.email.match(/^[\w-.]+@([\w-]+\.)+[\w-]{2,4}$/)) return 'Invalid email format';
+    if (editedProfile.phone && !editedProfile.phone.match(/^\+237\s?6[0-9]{8}$/)) return 'Phone number must be in format +237 6XX XX XX XX';
+    if (editedProfile.emergencyPhone && !editedProfile.emergencyPhone.match(/^\+237\s?6[0-9]{8}$/)) return 'Emergency phone number must be in format +237 6XX XX XX XX';
+    return '';
+  };
+
+  const handleSave = async () => {
+    const validationError = validateProfile();
+    if (validationError) {
+      setError(validationError);
+      setSuccess('');
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/auth/profile', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(editedProfile)
+      });
+      const data = await response.json();
+      if (response.ok) {
+        setProfile(data.profile);
+        setEditedProfile(data.profile);
+        setIsEditing(false);
+        setSuccess('Profile updated successfully! 🎉');
+        setError('');
+      } else {
+        setError(data.message || 'Failed to save profile');
+        setSuccess('');
+      }
+    } catch (err) {
+      setError('Error connecting to the server');
+      setSuccess('');
+    }
   };
 
   const handleCancel = () => {
-    setEditedProfile({...profile});
+    setEditedProfile({ ...profile });
     setIsEditing(false);
+    setError('');
+    setSuccess('');
   };
 
   const cameroonRegions = [
@@ -136,7 +199,7 @@ const EditProfile = () => {
               </select>
             ) : type === 'textarea' ? (
               <textarea
-                value={value}
+                value={value || ''}
                 onChange={(e) => handleInputChange(field, e.target.value)}
                 rows="3"
                 placeholder={placeholder}
@@ -145,7 +208,7 @@ const EditProfile = () => {
             ) : (
               <input
                 type={type}
-                value={value}
+                value={value || ''}
                 onChange={(e) => {
                   if (field.includes('.')) {
                     const [parent, child] = field.split('.');
@@ -311,6 +374,20 @@ const EditProfile = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Feedback Messages */}
+        {error && (
+          <div className="mb-4 p-4 bg-red-100 border border-red-200 text-red-700 rounded-lg flex items-center gap-2">
+            <AlertCircle className="w-5 h-5" />
+            {error}
+          </div>
+        )}
+        {success && (
+          <div className="mb-4 p-4 bg-green-100 border border-green-200 text-green-700 rounded-lg flex items-center gap-2">
+            <CheckCircle className="w-5 h-5" />
+            {success}
+          </div>
+        )}
+
         {/* Header */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-8">
           <div className="px-6 py-4 border-b border-gray-200">
