@@ -16,7 +16,11 @@ import {
 const EditProfile = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [activeSection, setActiveSection] = useState('personal');
-  const [profile, setProfile] = useState({
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+
+  // Default profile data for new users
+  const defaultProfile = {
     firstName: '',
     lastName: '',
     email: '',
@@ -24,7 +28,7 @@ const EditProfile = () => {
     dateOfBirth: '',
     gender: '',
     maritalStatus: '',
-    nationality: '',
+    nationality: 'Cameroonian',
     region: '',
     city: '',
     quarter: '',
@@ -46,21 +50,21 @@ const EditProfile = () => {
     lastEyeExam: '',
     lifestyle: {
       smokes: false,
-      alcohol: '',
-      exercise: '',
-      diet: ''
+      alcohol: 'Never',
+      exercise: 'Never',
+      diet: 'Balanced'
     },
     familyHistory: ''
-  });
-  const [editedProfile, setEditedProfile] = useState({ ...profile });
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+  };
+
+  const [profile, setProfile] = useState(defaultProfile);
+  const [editedProfile, setEditedProfile] = useState({ ...defaultProfile });
 
   // Fetch profile data on component mount
   useEffect(() => {
     const fetchProfile = async () => {
       try {
-        const response = await fetch('https://backend-b5jw.onrender.com/api/auth/profile', {
+        const response = await fetch('/api/auth/profile', {
           method: 'GET',
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('token')}`,
@@ -69,8 +73,22 @@ const EditProfile = () => {
         });
         const data = await response.json();
         if (response.ok) {
-          setProfile(data);
-          setEditedProfile(data);
+          // Merge fetched data with default profile to fill any missing fields
+          const mergedProfile = {
+            ...defaultProfile,
+            ...data,
+            lifestyle: {
+              ...defaultProfile.lifestyle,
+              ...data.lifestyle
+            }
+          };
+          setProfile(mergedProfile);
+          setEditedProfile(mergedProfile);
+          setError('');
+        } else if (response.status === 404) {
+          // If no profile exists (404), use default profile
+          setProfile(defaultProfile);
+          setEditedProfile(defaultProfile);
           setError('');
         } else {
           setError(data.message || 'Failed to load profile');
@@ -180,7 +198,7 @@ const EditProfile = () => {
           <>
             {type === 'select' && options ? (
               <select
-                value={value}
+                value={value || ''}
                 onChange={(e) => {
                   if (field.includes('.')) {
                     const [parent, child] = field.split('.');
@@ -398,9 +416,9 @@ const EditProfile = () => {
                 </div>
                 <div>
                   <h1 className="text-2xl font-bold text-gray-900">
-                    {profile.firstName} {profile.lastName}
+                    {profile.firstName || 'User'} {profile.lastName}
                   </h1>
-                  <p className="text-gray-500">{profile.profession} • {profile.city}, {profile.region}</p>
+                  <p className="text-gray-500">{profile.profession || 'Not specified'} • {profile.city || 'Not specified'}, {profile.region || 'Not specified'}</p>
                 </div>
               </div>
               
