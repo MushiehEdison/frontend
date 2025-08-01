@@ -13,7 +13,7 @@ import {
   ChevronDown,
   ChevronUp,
   Download,
-  Print,
+  Printer,
   MoreHorizontal,
   CalendarDays,
   SortAsc,
@@ -339,7 +339,7 @@ const AllVisits = () => {
                 onClick={() => console.log('Print visits')}
                 className="flex items-center gap-2 px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
               >
-                <Print className="w-4 h-4" />
+                <Printer className="w-4 h-4" />
                 Print
               </button>
             </div>
