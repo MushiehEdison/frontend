@@ -30,6 +30,7 @@ const Home = () => {
   const messageIdCounter = useRef(1);
   const wasListeningRef = useRef(false);
   const speechRecognitionRef = useRef(null);
+  const speechSynthesisRef = useRef(window.speechSynthesis);
 
   const { transcript, interimTranscript, finalTranscript, resetTranscript, listening } = useSpeechRecognition();
 
@@ -56,12 +57,75 @@ const Home = () => {
     return cleanText;
   };
 
-  const playAudio = (base64Audio) => {
-    if (!base64Audio) {
-      console.warn('No audio data to play');
-      setAudioError('No audio data received. Displaying text response.');
+  const playTTS = (text, language = user?.language || 'en-US') => {
+    if (!text) {
+      console.warn('No text provided for TTS');
+      setAudioError('No text available for voice response. Displaying text response.');
       return;
     }
+
+    try {
+      // Cancel any ongoing speech
+      speechSynthesisRef.current.cancel();
+
+      const utterance = new SpeechSynthesisUtterance(stripEmojis(text));
+      utterance.lang = language;
+
+      // Get available voices
+      const voices = speechSynthesisRef.current.getVoices();
+      console.log('Available voices:', voices);
+
+      // Select a voice matching the language
+      const preferredVoice = voices.find((voice) => voice.lang.startsWith(language.split('-')[0]));
+      if (preferredVoice) {
+        utterance.voice = preferredVoice;
+        console.log('Selected voice:', preferredVoice.name);
+      } else {
+        console.warn('No voice found for language:', language);
+      }
+
+      utterance.onstart = () => {
+        console.log('TTS playback started, isListening:', isListening);
+        setAudioError(null);
+        if (isListening) {
+          wasListeningRef.current = true;
+          setIsListening(false);
+          SpeechRecognition.stopListening();
+          SpeechRecognition.abortListening();
+          console.log('Mic stopped during TTS playback');
+        } else {
+          wasListeningRef.current = false;
+        }
+      };
+
+      utterance.onend = () => {
+        console.log('TTS playback ended, wasListening:', wasListeningRef.current);
+        if (wasListeningRef.current && networkStatus === 'online') {
+          setIsListening(true);
+          SpeechRecognition.startListening({ continuous: true, interimResults: true, language: user?.language || 'en-US' });
+          console.log('Mic restarted after TTS playback');
+        }
+      };
+
+      utterance.onerror = (error) => {
+        console.error('TTS playback error:', error);
+        setAudioError('Failed to play voice response. Displaying text response.');
+      };
+
+      speechSynthesisRef.current.speak(utterance);
+    } catch (error) {
+      console.error('Error setting up TTS:', error);
+      setAudioError('Error setting up voice playback. Displaying text response.');
+    }
+  };
+
+  const playAudio = (base64Audio, fallbackText, language = user?.language || 'en-US') => {
+    if (!base64Audio) {
+      console.warn('No audio data to play, falling back to TTS');
+      playTTS(fallbackText, language);
+      return;
+    }
+
     try {
       const audio = new Audio(`data:audio/mp3;base64,${base64Audio}`);
       audio.onplay = () => {
@@ -87,15 +151,18 @@ const Home = () => {
       };
       audio.onerror = (error) => {
         console.error('Audio playback error:', error);
-        setAudioError('Failed to play audio response. Displaying text response.');
+        setAudioError('Failed to play audio response. Falling back to browser voice response.');
+        playTTS(fallbackText, language);
       };
-      audio.play().catch(error => {
+      audio.play().catch((error) => {
         console.error('Error playing audio:', error);
-        setAudioError('Failed to play audio response. Displaying text response.');
+        setAudioError('Failed to play audio response. Falling back to browser voice response.');
+        playTTS(fallbackText, language);
       });
     } catch (error) {
       console.error('Error setting up audio:', error);
-      setAudioError('Error setting up audio playback. Displaying text response.');
+      setAudioError('Error setting up audio playback. Falling back to browser voice response.');
+      playTTS(fallbackText, language);
     }
   };
 
@@ -229,7 +296,7 @@ const Home = () => {
         clearTimeout(silenceTimerRef.current);
       }
       silenceTimerRef.current = setTimeout(() => {
-        setIsMicInput(true); // Ensure isMicInput is true for voice inputs
+        setIsMicInput(true);
         handleSendMessage(finalTranscript.trim());
         resetTranscript();
         if (isListening && networkStatus === 'online') {
@@ -272,9 +339,16 @@ const Home = () => {
     window.addEventListener('online', handleNetworkChange);
     window.addEventListener('offline', handleNetworkChange);
 
+    // Ensure voices are loaded for TTS
+    let voicesChangedHandler = () => {
+      console.log('SpeechSynthesis voices loaded:', speechSynthesisRef.current.getVoices());
+    };
+    speechSynthesisRef.current.addEventListener('voiceschanged', voicesChangedHandler);
+
     return () => {
       window.removeEventListener('online', handleNetworkChange);
       window.removeEventListener('offline', handleNetworkChange);
+      speechSynthesisRef.current.removeEventListener('voiceschanged', voicesChangedHandler);
       if (silenceTimerRef.current) {
         clearTimeout(silenceTimerRef.current);
       }
@@ -292,6 +366,8 @@ const Home = () => {
           console.error('Error stopping SpeechRecognition on unmount:', error);
         }
       }
+      // Cancel any ongoing TTS
+      speechSynthesisRef.current.cancel();
     };
   }, [isListening]);
 
@@ -398,25 +474,24 @@ const Home = () => {
         setMessages(formattedMessages);
         messageIdCounter.current = formattedMessages.length + 1;
         if (isMicInput) {
+          const aiResponse = data.messages.find(
+            (msg) => !msg.isUser && msg.timestamp === data.messages[data.messages.length - 1].timestamp
+          );
+          const cleanText = aiResponse ? stripEmojis(aiResponse.text) : '';
           if (data.audio) {
-            const cleanText = stripEmojis(
-              data.messages.find(
-                (msg) => !msg.isUser && msg.timestamp === data.messages[data.messages.length - 1].timestamp
-              )?.text
-            );
             console.log('Playing audio for cleaned text:', cleanText);
-            playAudio(data.audio);
+            playAudio(data.audio, cleanText);
           } else if (retryCount < maxRetries) {
             console.warn(`No audio received, retrying (${retryCount + 1}/${maxRetries})`);
             setTimeout(() => handleSendMessage(text, retryCount + 1), 1000 * (retryCount + 1));
             return;
           } else {
-            console.warn('No audio received after max retries, falling back to text');
-            setAudioError(data.audio_error || 'Voice response unavailable. Displaying text response.');
-            // Ensure the AI response is displayed
-            const aiResponse = data.messages.find((msg) => !msg.isUser && msg.timestamp === data.messages[data.messages.length - 1].timestamp);
-            if (aiResponse && aiResponse.text) {
-              setMessages((prev) => [...prev.filter((m) => m.id !== newMessage.id), ...formattedMessages]);
+            console.warn('No audio received after max retries, falling back to TTS');
+            setAudioError(data.audio_error || 'Voice response unavailable. Using browser voice response.');
+            if (cleanText) {
+              playTTS(cleanText);
+            } else {
+              setAudioError('No valid response text for voice output. Displaying text response.');
             }
           }
         }
@@ -454,7 +529,16 @@ const Home = () => {
       };
       setMessages((prev) => [...prev, errorResponse]);
       if (isMicInput) {
-        setAudioError('Failed to connect to server for audio response. Displaying text response.');
+        setAudioError('Failed to connect to server for audio response. Using browser voice response.');
+        const lastAiMessage = messages
+          .slice()
+          .reverse()
+          .find((msg) => !msg.isUser);
+        if (lastAiMessage && lastAiMessage.text) {
+          playTTS(stripEmojis(lastAiMessage.text));
+        } else {
+          setAudioError('No valid response text for voice output. Displaying text response.');
+        }
       }
     }
   };
