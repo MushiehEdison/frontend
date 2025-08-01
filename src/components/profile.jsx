@@ -7,7 +7,6 @@ import {
   Phone, 
   MapPin, 
   Heart, 
-  Shield, 
   Calendar,
   AlertCircle,
   CheckCircle
@@ -19,13 +18,13 @@ const EditProfile = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  // Default profile data for new users
+  // Default profile data aligned with MedicalProfile model
   const defaultProfile = {
     firstName: '',
     lastName: '',
-    email: '',
     phone: '',
     dateOfBirth: '',
+    age: '',
     gender: '',
     maritalStatus: '',
     nationality: 'Cameroonian',
@@ -54,9 +53,7 @@ const EditProfile = () => {
       exercise: 'Never',
       diet: 'Balanced'
     },
-    familyHistory: '',
-    insuranceProvider: '',
-    insuranceNumber: ''
+    familyHistory: ''
   };
 
   const [profile, setProfile] = useState(defaultProfile);
@@ -75,7 +72,7 @@ const EditProfile = () => {
         });
         const data = await response.json();
         if (response.ok) {
-          // Merge fetched data with default profile to fill any missing fields
+          // Merge fetched data with default profile
           const mergedProfile = {
             ...defaultProfile,
             ...data,
@@ -88,7 +85,6 @@ const EditProfile = () => {
           setEditedProfile(mergedProfile);
           setError('');
         } else if (response.status === 404) {
-          // If no profile exists (404), use default profile
           setProfile(defaultProfile);
           setEditedProfile(defaultProfile);
           setError('');
@@ -103,10 +99,25 @@ const EditProfile = () => {
   }, []);
 
   const handleInputChange = (field, value) => {
-    setEditedProfile(prev => ({
-      ...prev,
-      [field]: value
-    }));
+    if (field === 'dateOfBirth' && value) {
+      const dob = new Date(value);
+      const today = new Date();
+      let age = today.getFullYear() - dob.getFullYear();
+      const monthDiff = today.getMonth() - dob.getMonth();
+      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
+        age--;
+      }
+      setEditedProfile(prev => ({
+        ...prev,
+        dateOfBirth: value,
+        age: age.toString()
+      }));
+    } else {
+      setEditedProfile(prev => ({
+        ...prev,
+        [field]: value
+      }));
+    }
   };
 
   const handleNestedInputChange = (parentField, field, value) => {
@@ -162,8 +173,7 @@ const EditProfile = () => {
     { id: 'personal', label: 'Personal Info', icon: User },
     { id: 'contact', label: 'Contact & Address', icon: MapPin },
     { id: 'emergency', label: 'Emergency Contact', icon: Phone },
-    { id: 'medical', label: 'Medical Info', icon: Heart },
-    { id: 'insurance', label: 'Insurance', icon: Shield }
+    { id: 'medical', label: 'Medical Info', icon: Heart }
   ];
 
   const renderField = (label, field, type = 'text', options = null, placeholder = '') => {
@@ -267,7 +277,6 @@ const EditProfile = () => {
   const renderContactSection = () => (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {renderField('Email Address', 'email', 'email', null, 'your.email@example.com')}
         {renderField('Phone Number', 'phone', 'tel', null, '+237 6 XX XX XX XX')}
         {renderField('Region', 'region', 'select', cameroonRegions.map(r => ({ value: r, label: r })))}
         {renderField('City', 'city', 'text', null, 'e.g., Douala')}
@@ -355,22 +364,12 @@ const EditProfile = () => {
     </div>
   );
 
-  const renderInsuranceSection = () => (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {renderField('Insurance Provider', 'insuranceProvider', 'text', null, 'e.g., CNPS')}
-        {renderField('Insurance Number', 'insuranceNumber', 'text', null, 'Your policy number')}
-      </div>
-    </div>
-  );
-
   const renderCurrentSection = () => {
     switch (activeSection) {
       case 'personal': return renderPersonalSection();
       case 'contact': return renderContactSection();
       case 'emergency': return renderEmergencySection();
       case 'medical': return renderMedicalSection();
-      case 'insurance': return renderInsuranceSection();
       default: return renderPersonalSection();
     }
   };
