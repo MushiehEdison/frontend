@@ -54,7 +54,9 @@ const EditProfile = () => {
       exercise: 'Never',
       diet: 'Balanced'
     },
-    familyHistory: ''
+    familyHistory: '',
+    insuranceProvider: '',
+    insuranceNumber: ''
   };
 
   const [profile, setProfile] = useState(defaultProfile);
@@ -117,25 +119,9 @@ const EditProfile = () => {
     }));
   };
 
-  const validateProfile = () => {
-    if (!editedProfile.firstName.trim()) return 'First name is required';
-    if (!editedProfile.lastName.trim()) return 'Last name is required';
-    if (!editedProfile.email.match(/^[\w-.]+@([\w-]+\.)+[\w-]{2,4}$/)) return 'Invalid email format';
-    if (editedProfile.phone && !editedProfile.phone.match(/^\+237\s?6[0-9]{8}$/)) return 'Phone number must be in format +237 6XX XX XX XX';
-    if (editedProfile.emergencyPhone && !editedProfile.emergencyPhone.match(/^\+237\s?6[0-9]{8}$/)) return 'Emergency phone number must be in format +237 6XX XX XX XX';
-    return '';
-  };
-
   const handleSave = async () => {
-    const validationError = validateProfile();
-    if (validationError) {
-      setError(validationError);
-      setSuccess('');
-      return;
-    }
-
     try {
-      const response = await fetch('/api/auth/profile', {
+      const response = await fetch('https://backend-b5jw.onrender.com/api/auth/profile', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
