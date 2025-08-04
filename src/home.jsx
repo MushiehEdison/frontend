@@ -30,6 +30,7 @@ const Home = () => {
   const messageIdCounter = useRef(1);
   const wasListeningRef = useRef(false);
   const speechRecognitionRef = useRef(null);
+  const lastTranscriptRef = useRef(''); // Track last processed transcript
 
   const { transcript, interimTranscript, finalTranscript, resetTranscript, listening } = useSpeechRecognition();
 
@@ -119,7 +120,7 @@ const Home = () => {
       setStatus('');
       setShowStatus(false);
       resetTranscript();
-      
+      lastTranscriptRef.current = ''; // Reset transcript tracking
       try {
         SpeechRecognition.stopListening();
         SpeechRecognition.abortListening();
@@ -148,7 +149,7 @@ const Home = () => {
       setStatus('listening...');
       setShowStatus(true);
       resetTranscript();
-      
+      lastTranscriptRef.current = ''; // Reset transcript tracking
       speechRecognitionRef.current = SpeechRecognition.getRecognition();
       SpeechRecognition.startListening({ 
         continuous: true, 
@@ -223,15 +224,17 @@ const Home = () => {
   }, [messages]);
 
   useEffect(() => {
-    if (finalTranscript.trim()) {
+    if (finalTranscript.trim() && finalTranscript !== lastTranscriptRef.current) {
       console.log('Final transcript received:', finalTranscript, 'isMicInput:', isMicInput);
+      lastTranscriptRef.current = finalTranscript; // Update last processed transcript
       if (silenceTimerRef.current) {
         clearTimeout(silenceTimerRef.current);
       }
       silenceTimerRef.current = setTimeout(() => {
-        setIsMicInput(true); // Ensure isMicInput is true for voice inputs
+        setIsMicInput(true);
         handleSendMessage(finalTranscript.trim());
         resetTranscript();
+        lastTranscriptRef.current = ''; // Clear after sending
         if (isListening && networkStatus === 'online') {
           SpeechRecognition.startListening({ continuous: true, interimResults: true, language: user?.language || 'en-US' });
         }
@@ -248,6 +251,7 @@ const Home = () => {
         setStatus('');
         setShowStatus(false);
         resetTranscript();
+        lastTranscriptRef.current = ''; // Reset transcript tracking
         try {
           SpeechRecognition.stopListening();
           SpeechRecognition.abortListening();
@@ -397,28 +401,21 @@ const Home = () => {
         console.log('Setting formatted messages:', formattedMessages);
         setMessages(formattedMessages);
         messageIdCounter.current = formattedMessages.length + 1;
-        if (isMicInput) {
-          if (data.audio) {
-            const cleanText = stripEmojis(
-              data.messages.find(
-                (msg) => !msg.isUser && msg.timestamp === data.messages[data.messages.length - 1].timestamp
-              )?.text
-            );
-            console.log('Playing audio for cleaned text:', cleanText);
-            playAudio(data.audio);
-          } else if (retryCount < maxRetries) {
-            console.warn(`No audio received, retrying (${retryCount + 1}/${maxRetries})`);
-            setTimeout(() => handleSendMessage(text, retryCount + 1), 1000 * (retryCount + 1));
-            return;
-          } else {
-            console.warn('No audio received after max retries, falling back to text');
-            setAudioError(data.audio_error || 'Voice response unavailable. Displaying text response.');
-            // Ensure the AI response is displayed
-            const aiResponse = data.messages.find((msg) => !msg.isUser && msg.timestamp === data.messages[data.messages.length - 1].timestamp);
-            if (aiResponse && aiResponse.text) {
-              setMessages((prev) => [...prev.filter((m) => m.id !== newMessage.id), ...formattedMessages]);
-            }
-          }
+        if (isMicInput && data.audio) {
+          const cleanText = stripEmojis(
+            data.messages.find(
+              (msg) => !msg.isUser && msg.timestamp === data.messages[data.messages.length - 1].timestamp
+            )?.text
+          );
+          console.log('Playing audio for cleaned text:', cleanText);
+          playAudio(data.audio);
+        } else if (isMicInput && !data.audio && retryCount < maxRetries) {
+          console.warn(`No audio received, retrying (${retryCount + 1}/${maxRetries})`);
+          setTimeout(() => handleSendMessage(text, retryCount + 1), 1000 * (retryCount + 1));
+          return;
+        } else if (isMicInput) {
+          console.warn('No audio received after max retries, falling back to text');
+          setAudioError(data.audio_error || 'Voice response unavailable. Displaying text response.');
         }
         if (!isValidId && data.id) {
           console.log('Navigating to new conversation ID:', data.id);
