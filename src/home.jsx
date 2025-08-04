@@ -57,63 +57,89 @@ export const ChatContext = createContext();
        console.log('Original text:', text, 'Cleaned text:', cleanText);
        return cleanText;
      };
+     
+const generateTtsAudio = async (text, language = 'en') => {
+  if (!text || text.trim() === '') {
+    console.error('Invalid or empty text for TTS:', text);
+    return [null, 'Invalid or empty text for audio generation'];
+  }
 
-     const generateTtsAudio = async (text, language = 'en') => {
-       if (!text || text.trim() === '') {
-         console.error('Invalid or empty text for TTS:', text);
-         return null, 'Invalid or empty text for audio generation';
-       }
+  if (!MURF_API_KEY || MURF_API_KEY === 'your_murf_api_key') {
+    console.error('Murf AI API key is missing or invalid');
+    return [null, 'Murf AI API key is missing or invalid'];
+  }
 
-       if (!MURF_API_KEY || MURF_API_KEY === 'your_murf_api_key') {
-         console.error('Murf AI API key is missing or invalid');
-         return null, 'Murf AI API key is missing or invalid';
-       }
+  // Updated voice mapping - using just the voice names (not full IDs)
+  const voiceMap = { 
+    'en': 'natalie',  
+    'fr': 'denise'   
+  }; 
 
-       const voiceMap = { 'en': 'en-US-natalie', 'fr': 'fr-FR-denise' }; // Simplified voice IDs
-       const payload = {
-         text: text.slice(0, 1000), // Limit to 1000 chars
-         voiceId: voiceMap[language] || 'en-US-natalie'
-       };
+  // Correct API payload structure based on official docs
+  const payload = {
+    text: text.slice(0, 1000), // Limit to 1000 chars
+    voiceId: voiceMap[language] || 'natalie',
+    format: 'MP3',
+    modelVersion: 'GEN2',
+    responseFormat: 'base64',  // This tells API to return base64 instead of URL
+    sampleRate: 44100
+  };
 
-       try {
-         console.log('Sending TTS request to Murf AI:', { url: 'https://api.murf.ai/v1/speech/generate', payload });
-         const response = await fetch('https://api.murf.ai/v1/speech/generate', {
-           method: 'POST',
-           headers: {
-             'Authorization': `Bearer ${MURF_API_KEY}`,
-             'Content-Type': 'application/json',
-             'Accept': 'audio/mpeg'
-           },
-           body: JSON.stringify(payload)
-         });
+  try {
+    console.log('Sending TTS request to Murf AI:', { 
+      url: 'https://api.murf.ai/v1/speech/synthesize',  // Correct endpoint
+      payload 
+    });
 
-         if (!response.ok) {
-           let errorData;
-           try {
-             errorData = await response.json();
-           } catch {
-             errorData = await response.text();
-           }
-           console.error('Murf AI response:', errorData);
-           throw new Error(`Murf AI request failed: ${response.status} - ${JSON.stringify(errorData)}`);
-         }
+    const response = await fetch('https://api.murf.ai/v1/speech/synthesize', {  // Fixed endpoint
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${MURF_API_KEY}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'  // Changed from audio/mpeg to application/json
+      },
+      body: JSON.stringify(payload)
+    });
 
-         const audioBlob = await response.blob();
-         const arrayBuffer = await audioBlob.arrayBuffer();
-         const audioBase64 = btoa(
-           new Uint8Array(arrayBuffer).reduce(
-             (data, byte) => data + String.fromCharCode(byte),
-             ''
-           )
-         );
-         console.log('Generated base64 audio, length:', audioBase64.length, 'first 100 chars:', audioBase64.slice(0, 100));
-         return audioBase64, null;
-       } catch (error) {
-         console.error('Murf AI TTS error:', error);
-         return null, `TTS generation failed: ${error.message}`;
-       }
-     };
+    if (!response.ok) {
+      let errorData;
+      try {
+        errorData = await response.json();
+      } catch {
+        errorData = await response.text();
+      }
+      console.error('Murf AI response:', errorData);
+      throw new Error(`Murf AI request failed: ${response.status} - ${JSON.stringify(errorData)}`);
+    }
 
+    const data = await response.json();
+    console.log('Murf AI response:', data);
+
+    // The response should contain base64 audio data
+    if (data.audioBase64) {
+      console.log('Generated base64 audio, length:', data.audioBase64.length);
+      return [data.audioBase64, null];
+    } else if (data.audioUrl) {
+      // If for some reason we get a URL instead, fetch the audio
+      const audioResponse = await fetch(data.audioUrl);
+      const audioBlob = await audioResponse.blob();
+      const arrayBuffer = await audioBlob.arrayBuffer();
+      const audioBase64 = btoa(
+        new Uint8Array(arrayBuffer).reduce(
+          (data, byte) => data + String.fromCharCode(byte),
+          ''
+        )
+      );
+      return [audioBase64, null];
+    } else {
+      throw new Error('No audio data received from Murf AI');
+    }
+
+  } catch (error) {
+    console.error('Murf AI TTS error:', error);
+    return [null, `TTS generation failed: ${error.message}`];
+  }
+};
      const playAudio = (base64Audio) => {
        if (!base64Audio) {
          console.warn('No audio data to play');
