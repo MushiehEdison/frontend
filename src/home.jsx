@@ -71,10 +71,10 @@ const generateTtsAudio = async (text, language = 'en') => {
 
   try {
     // Using a CORS proxy - NOT SECURE FOR PRODUCTION!
-    const proxyUrl = 'https://cors-anywhere.herokuapp.com/';
+    const proxyUrl = ' ';
     const targetUrl = 'https://api.murf.ai/v1/speech/synthesize';
     
-    const response = await fetch(proxyUrl + targetUrl, {
+    const response = await fetch(targetUrl, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${MURF_API_KEY}`,
