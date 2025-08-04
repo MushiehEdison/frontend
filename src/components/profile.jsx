@@ -130,32 +130,50 @@ const EditProfile = () => {
     }));
   };
 
-  const handleSave = async () => {
-    try {
-      const response = await fetch('https://backend-b5jw.onrender.com/api/auth/profile', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(editedProfile)
-      });
-      const data = await response.json();
-      if (response.ok) {
-        setProfile(data.profile);
-        setEditedProfile(data.profile);
-        setIsEditing(false);
-        setSuccess('Profile updated successfully! 🎉');
-        setError('');
-      } else {
-        setError(data.message || 'Failed to save profile');
-        setSuccess('');
+// In profile.js - Update the handleSave function:
+
+const handleSave = async () => {
+  try {
+    // Prepare payload with null-safe dates
+    const payload = {
+      ...editedProfile,
+      dateOfBirth: editedProfile.dateOfBirth || null,
+      lastDentalVisit: editedProfile.lastDentalVisit || null,
+      lastEyeExam: editedProfile.lastEyeExam || null,
+      lifestyle: {
+        smokes: editedProfile.lifestyle?.smokes || false,
+        alcohol: editedProfile.lifestyle?.alcohol || 'Never',
+        exercise: editedProfile.lifestyle?.exercise || 'Never',
+        diet: editedProfile.lifestyle?.diet || 'Balanced'
       }
-    } catch (err) {
-      setError('Error connecting to the server');
-      setSuccess('');
+    };
+
+    // Remove empty strings from payload
+    Object.keys(payload).forEach(key => {
+      if (payload[key] === '') payload[key] = null;
+    });
+
+    const response = await fetch('https://backend-b5jw.onrender.com/api/auth/profile', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Update failed');
     }
-  };
+
+    // Success handling
+    setIsEditing(false);
+    setSuccess('Profile updated!');
+  } catch (err) {
+    setError(err.message);
+  }
+};
 
   const handleCancel = () => {
     setEditedProfile({ ...profile });

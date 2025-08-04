@@ -15,7 +15,7 @@ const Navbar = ({ isDarkMode, toggleDarkMode, toggleSidebar }) => {
         <div className="flex items-center space-x-2">
           <Heart className="w-6 h-6 text-blue-500" />
           <span className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
-            ＨｅａｌＩＡ
+            𝐻𝑒𝒶𝓁𝐼𝒜
           </span>
         </div>
         

@@ -34,6 +34,8 @@ const Home = () => {
 
   const { transcript, interimTranscript, finalTranscript, resetTranscript, listening } = useSpeechRecognition();
 
+  const MURF_API_KEY = process.env.REACT_APP_MURF_API_KEY;
+
   const generateUniqueId = () => {
     return `msg-${messageIdCounter.current++}`;
   };
@@ -57,10 +59,72 @@ const Home = () => {
     return cleanText;
   };
 
+  const generateTtsAudio = async (text, language = 'en') => {
+    if (!MURF_API_KEY) {
+      console.error('Murf AI API key not set');
+      return null, 'TTS service unavailable: API key not configured';
+    }
+
+    if (!text || text.trim() === '') {
+      console.error('Invalid or empty text for TTS:', text);
+      return null, 'Invalid or empty text for audio generation';
+    }
+
+    const voiceMap = {
+      'en': 'en-US-natalie', // African English voice
+      'fr': 'fr-FR-denise'   // African French voice
+    };
+    const voiceId = voiceMap[language] || voiceMap['en'];
+
+    const payload = {
+      text: text.trim().slice(0, 1000), // Limit to 1000 chars
+      voiceId,
+      format: 'MP3',
+      sample_rate: 24000,
+      pitch: 'low',
+      speed: 0.9,
+      prosody: 'expressive'
+    };
+
+    try {
+      console.log('Sending TTS request to Murf AI:', payload);
+      const response = await fetch('https://api.murf.ai/v1/speech/generate', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${MURF_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        throw new Error(`TTS request failed: ${response.status} ${response.statusText}`);
+      }
+
+      const audioContent = await response.blob();
+      if (!audioContent || audioContent.size < 100) {
+        console.error('Invalid or empty audio content:', audioContent?.size);
+        return null, 'No audio received from TTS service';
+      }
+
+      const audioBase64 = await new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result.split(',')[1]);
+        reader.readAsDataURL(audioContent);
+      });
+
+      console.log('Generated base64 audio, length:', audioBase64.length);
+      return audioBase64, null;
+    } catch (error) {
+      console.error('TTS generation error:', error);
+      return null, `TTS generation failed: ${error.message}`;
+    }
+  };
+
   const playAudio = (base64Audio) => {
     if (!base64Audio) {
       console.warn('No audio data to play');
-      setAudioError('No audio data received. Displaying text response.');
+      setAudioError('Voice response unavailable. Displaying text response.');
       return;
     }
     try {
@@ -121,7 +185,7 @@ const Home = () => {
       setShowStatus(false);
       resetTranscript();
       lastTranscriptRef.current = '';
-      isProcessingRef.current = false; // Reset processing lock
+      isProcessingRef.current = false;
       try {
         SpeechRecognition.stopListening();
         SpeechRecognition.abortListening();
@@ -151,7 +215,7 @@ const Home = () => {
       setShowStatus(true);
       resetTranscript();
       lastTranscriptRef.current = '';
-      isProcessingRef.current = false; // Reset processing lock
+      isProcessingRef.current = false;
       speechRecognitionRef.current = SpeechRecognition.getRecognition();
       SpeechRecognition.startListening({ 
         continuous: true, 
@@ -229,7 +293,7 @@ const Home = () => {
     if (finalTranscript.trim() && finalTranscript !== lastTranscriptRef.current && !isProcessingRef.current) {
       console.log('Final transcript received:', finalTranscript, 'isMicInput:', isMicInput);
       lastTranscriptRef.current = finalTranscript;
-      isProcessingRef.current = true; // Lock processing
+      isProcessingRef.current = true;
       if (silenceTimerRef.current) {
         clearTimeout(silenceTimerRef.current);
       }
@@ -238,11 +302,11 @@ const Home = () => {
         handleSendMessage(finalTranscript.trim());
         resetTranscript();
         lastTranscriptRef.current = '';
-        isProcessingRef.current = false; // Unlock after sending
+        isProcessingRef.current = false;
         if (isListening && networkStatus === 'online') {
           SpeechRecognition.startListening({ continuous: true, interimResults: true, language: user?.language || 'en-US' });
         }
-      }, 3000);
+      }, 5000);
     }
   }, [finalTranscript, isListening, networkStatus]);
 
@@ -256,7 +320,7 @@ const Home = () => {
         setShowStatus(false);
         resetTranscript();
         lastTranscriptRef.current = '';
-        isProcessingRef.current = false; // Reset processing lock
+        isProcessingRef.current = false;
         try {
           SpeechRecognition.stopListening();
           SpeechRecognition.abortListening();
@@ -304,8 +368,8 @@ const Home = () => {
     };
   }, [isListening]);
 
-  const handleSendMessage = async (text, retryCount = 0) => {
-    console.log('handleSendMessage called with text:', text, 'isMicInput:', isMicInput, 'retryCount:', retryCount);
+  const handleSendMessage = async (text) => {
+    console.log('handleSendMessage called with text:', text, 'isMicInput:', isMicInput);
     const token = localStorage.getItem('token');
     if (!token) {
       console.error('No token found in localStorage');
@@ -321,7 +385,7 @@ const Home = () => {
       if (isMicInput) {
         setAudioError('Please sign in to use voice features.');
       }
-      isProcessingRef.current = false; // Unlock processing
+      isProcessingRef.current = false;
       return;
     }
 
@@ -341,7 +405,7 @@ const Home = () => {
         ]);
         localStorage.removeItem('token');
         navigate('/signin');
-        isProcessingRef.current = false; // Unlock processing
+        isProcessingRef.current = false;
         return;
       }
     } catch (error) {
@@ -357,7 +421,7 @@ const Home = () => {
       ]);
       localStorage.removeItem('token');
       navigate('/signin');
-      isProcessingRef.current = false; // Unlock processing
+      isProcessingRef.current = false;
       return;
     }
 
@@ -378,9 +442,8 @@ const Home = () => {
       ? `https://backend-b5jw.onrender.com/api/auth/conversation/${conversationId}`
       : 'https://backend-b5jw.onrender.com/api/auth/conversation';
 
-    console.log('Sending POST request to:', url, 'with body:', { message: text, isMicInput });
+    console.log('Sending POST request to:', url, 'with body:', { message: text });
 
-    const maxRetries = 3;
     try {
       const response = await fetch(url, {
         method: 'POST',
@@ -389,7 +452,7 @@ const Home = () => {
           'Authorization': `Bearer ${token}`,
         },
         credentials: 'include',
-        body: JSON.stringify({ message: text, isMicInput }),
+        body: JSON.stringify({ message: text }),
       });
 
       console.log('POST response status:', response.status);
@@ -409,21 +472,20 @@ const Home = () => {
         console.log('Setting formatted messages:', formattedMessages);
         setMessages(formattedMessages);
         messageIdCounter.current = formattedMessages.length + 1;
-        if (isMicInput && data.audio) {
-          const cleanText = stripEmojis(
-            data.messages.find(
-              (msg) => !msg.isUser && msg.timestamp === data.messages[data.messages.length - 1].timestamp
-            )?.text
+        if (isMicInput) {
+          const latestResponse = data.messages.find(
+            (msg) => !msg.isUser && msg.timestamp === data.messages[data.messages.length - 1].timestamp
           );
-          console.log('Playing audio for cleaned text:', cleanText);
-          playAudio(data.audio);
-        } else if (isMicInput && !data.audio && retryCount < maxRetries) {
-          console.warn(`No audio received, retrying (${retryCount + 1}/${maxRetries})`);
-          setTimeout(() => handleSendMessage(text, retryCount + 1), 1000 * (retryCount + 1));
-          return;
-        } else if (isMicInput) {
-          console.warn('No audio received after max retries, falling back to text');
-          setAudioError(data.audio_error || 'Voice response unavailable. Displaying text response.');
+          const cleanText = stripEmojis(latestResponse?.text);
+          console.log('Generating audio for response:', cleanText);
+          const [audioBase64, audioError] = await generateTtsAudio(cleanText, user?.language || 'en');
+          if (audioBase64) {
+            console.log('Playing audio response');
+            playAudio(audioBase64);
+          } else {
+            console.warn('No audio generated:', audioError);
+            setAudioError(audioError || 'Voice response unavailable. Displaying text response.');
+          }
         }
         if (!isValidId && data.id) {
           console.log('Navigating to new conversation ID:', data.id);
@@ -439,18 +501,12 @@ const Home = () => {
         };
         setMessages((prev) => [...prev, errorResponse]);
         if (isMicInput) {
-          setAudioError(data.audio_error || 'Voice response unavailable. Displaying text response.');
+          setAudioError('Voice response unavailable. Displaying text response.');
         }
       }
-      isProcessingRef.current = false; // Unlock processing
+      isProcessingRef.current = false;
     } catch (error) {
       console.error('Error during POST request:', error);
-      if (retryCount < maxRetries) {
-        console.warn(`Request failed, retrying (${retryCount + 1}/${maxRetries})`);
-        setTimeout(() => handleSendMessage(text, retryCount + 1), 1000 * (retryCount + 1));
-        return;
-      }
-      console.error('Max retries reached, giving up');
       setShowStatus(false);
       const errorResponse = {
         id: generateUniqueId(),
@@ -462,7 +518,7 @@ const Home = () => {
       if (isMicInput) {
         setAudioError('Failed to connect to server for audio response. Displaying text response.');
       }
-      isProcessingRef.current = false; // Unlock processing
+      isProcessingRef.current = false;
     }
   };
 
