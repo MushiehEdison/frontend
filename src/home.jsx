@@ -57,84 +57,86 @@ const Home = () => {
     return cleanText;
   };
 
-  const generateTtsAudio = async (text, language = 'en') => {
-    if (!text || text.trim() === '') {
-      console.error('Invalid or empty text for TTS:', text);
-      return null, 'Invalid or empty text for audio generation';
-    }
+ const generateTtsAudio = async (text, language = 'en') => {
+       if (!text || text.trim() === '') {
+         console.error('Invalid or empty text for TTS:', text);
+         return null, 'Invalid or empty text for audio generation';
+       }
 
-    try {
-      console.log('Sending TTS request to backend proxy:', { text, language });
-      const response = await fetch('https://backend-b5jw.onrender.com/api/auth/tts', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        credentials: 'include',
-        body: JSON.stringify({ text, language })
-      });
+       try {
+         console.log('Sending TTS request to backend proxy:', { text, language });
+         const response = await fetch('https://backend-b5jw.onrender.com/api/auth/tts', {
+           method: 'POST',
+           headers: {
+             'Content-Type': 'application/json',
+             'Authorization': `Bearer ${token}`,
+           },
+           credentials: 'include',
+           body: JSON.stringify({ text, language })
+         });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`TTS proxy request failed: ${response.status} ${response.statusText} - ${errorText}`);
-      }
+         if (!response.ok) {
+           const errorData = await response.json();
+           console.error('TTS proxy response:', errorData);
+           throw new Error(`TTS proxy request failed: ${response.status} - ${errorData.error || response.statusText}`);
+         }
 
-      const data = await response.json();
-      if (data.audio) {
-        console.log('Generated base64 audio from proxy, length:', data.audio.length);
-        return data.audio, null;
-      } else {
-        throw new Error(data.error || 'No audio received from TTS proxy');
-      }
-    } catch (error) {
-      console.error('TTS proxy error:', error);
-      return null, `TTS generation failed: ${error.message}`;
-    }
-  };
+         const data = await response.json();
+         if (data.audio) {
+           console.log('Generated base64 audio from proxy, length:', data.audio.length, 'first 100 chars:', data.audio.slice(0, 100));
+           return data.audio, null;
+         } else {
+           throw new Error(data.error || 'No audio received from TTS proxy');
+         }
+       } catch (error) {
+         console.error('TTS proxy error:', error);
+         return null, `TTS generation failed: ${error.message}`;
+       }
+     };
 
-  const playAudio = (base64Audio) => {
-    if (!base64Audio) {
-      console.warn('No audio data to play');
-      setAudioError('Voice response unavailable. Displaying text response.');
-      return;
-    }
-    try {
-      const audio = new Audio(`data:audio/mpeg;base64,${base64Audio}`);
-      audio.onplay = () => {
-        console.log('Audio playback started, isListening:', isListening);
-        setAudioError(null);
-        if (isListening) {
-          wasListeningRef.current = true;
-          setIsListening(false);
-          SpeechRecognition.stopListening();
-          SpeechRecognition.abortListening();
-          console.log('Mic stopped during audio playback');
-        } else {
-          wasListeningRef.current = false;
-        }
-      };
-      audio.onended = () => {
-        console.log('Audio playback ended, wasListening:', wasListeningRef.current);
-        if (wasListeningRef.current && networkStatus === 'online') {
-          setIsListening(true);
-          SpeechRecognition.startListening({ continuous: true, interimResults: true, language: user?.language || 'en-US' });
-          console.log('Mic restarted after audio playback');
-        }
-      };
-      audio.onerror = (error) => {
-        console.error('Audio playback error:', error);
-        setAudioError('Failed to play audio response. Displaying text response.');
-      };
-      audio.play().catch(error => {
-        console.error('Error playing audio:', error);
-        setAudioError('Failed to play audio response. Displaying text response.');
-      });
-    } catch (error) {
-      console.error('Error setting up audio:', error);
-      setAudioError('Error setting up audio playback. Displaying text response.');
-    }
-  };
+     const playAudio = (base64Audio) => {
+       if (!base64Audio) {
+         console.warn('No audio data to play');
+         setAudioError('Voice response unavailable. Displaying text response.');
+         return;
+       }
+       try {
+         console.log('Attempting to play audio, base64 length:', base64Audio.length);
+         const audio = new Audio(`data:audio/mpeg;base64,${base64Audio}`);
+         audio.onplay = () => {
+           console.log('Audio playback started, isListening:', isListening);
+           setAudioError(null);
+           if (isListening) {
+             wasListeningRef.current = true;
+             setIsListening(false);
+             SpeechRecognition.stopListening();
+             SpeechRecognition.abortListening();
+             console.log('Mic stopped during audio playback');
+           } else {
+             wasListeningRef.current = false;
+           }
+         };
+         audio.onended = () => {
+           console.log('Audio playback ended, wasListening:', wasListeningRef.current);
+           if (wasListeningRef.current && networkStatus === 'online') {
+             setIsListening(true);
+             SpeechRecognition.startListening({ continuous: true, interimResults: true, language: user?.language || 'en-US' });
+             console.log('Mic restarted after audio playback');
+           }
+         };
+         audio.onerror = (error) => {
+           console.error('Audio playback error:', error);
+           setAudioError('Failed to play audio response. Displaying text response.');
+         };
+         audio.play().catch(error => {
+           console.error('Error playing audio:', error);
+           setAudioError('Failed to play audio response. Try a different browser or check the audio format.');
+         });
+       } catch (error) {
+         console.error('Error setting up audio:', error);
+         setAudioError('Error setting up audio playback. Displaying text response.');
+       }
+     };
 
   const handleToggleListening = () => {
     console.log('Toggling listening:', isListening ? 'Stopping' : 'Starting');
