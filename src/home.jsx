@@ -59,98 +59,103 @@ const Home = () => {
     return cleanText;
   };
 
-  const generateTtsAudio = async (text, language = 'en') => {
-    if (!text || text.trim() === '') {
-      console.error('Invalid or empty text for TTS:', text);
-      return null, 'Invalid or empty text for audio generation';
-    }
+     const generateTtsAudio = async (text, language = 'en') => {
+       if (!text || text.trim() === '') {
+         console.error('Invalid or empty text for TTS:', text);
+         return null, 'Invalid or empty text for audio generation';
+       }
 
-    const voiceMap = { 'en': 'en-US-natalie', 'fr': 'fr-FR-denise' };
-    const payload = {
-      text: text.slice(0, 1000),
-      voiceId: voiceMap[language] || 'en-US-natalie',
-      format: 'mp3',
-      sampleRate: 24000,
-      bitrate: 128
-    };
+       if (!MURF_API_KEY || MURF_API_KEY === 'your_murf_api_key') {
+         console.error('Murf AI API key is missing or invalid');
+         return null, 'Murf AI API key is missing or invalid';
+       }
 
-    try {
-      console.log('Sending TTS request to Murf AI:', payload);
-      const response = await fetch('https://api.murf.ai/v1/speech/generate', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${MURF_API_KEY}`,
-          'Content-Type': 'application/json',
-          'Accept': 'audio/mpeg'
-        },
-        body: JSON.stringify(payload)
-      });
+       const voiceMap = { 'en': 'en-US-1-natalie', 'fr': 'fr-FR-1-denise' }; // Updated voice IDs
+       const payload = {
+         text: text.slice(0, 1000),
+         voiceId: voiceMap[language] || 'en-US-1-natalie',
+         format: 'MP3', // Uppercase as per Murf AI docs
+         sampleRate: 24000,
+         bitrate: '128' // String format as per some API requirements
+       };
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Murf AI response:', errorText);
-        throw new Error(`Murf AI request failed: ${response.status} - ${errorText}`);
-      }
+       try {
+         console.log('Sending TTS request to Murf AI:', { url: 'https://api.murf.ai/v1/speech/generate', payload });
+         const response = await fetch('https://api.murf.ai/v1/speech/generate', {
+           method: 'POST',
+           headers: {
+             'Authorization': `Bearer ${MURF_API_KEY}`,
+             'Content-Type': 'application/json',
+             'Accept': 'audio/mpeg'
+           },
+           body: JSON.stringify(payload)
+         });
 
-      const audioBlob = await response.blob();
-      const arrayBuffer = await audioBlob.arrayBuffer();
-      const audioBase64 = btoa(
-        new Uint8Array(arrayBuffer).reduce(
-          (data, byte) => data + String.fromCharCode(byte),
-          ''
-        )
-      );
-      console.log('Generated base64 audio, length:', audioBase64.length, 'first 100 chars:', audioBase64.slice(0, 100));
-      return audioBase64, null;
-    } catch (error) {
-      console.error('Murf AI TTS error:', error);
-      return null, `TTS generation failed: ${error.message}`;
-    }
-  };
+         if (!response.ok) {
+           const errorData = await response.json();
+           console.error('Murf AI response:', errorData);
+           throw new Error(`Murf AI request failed: ${response.status} - ${JSON.stringify(errorData)}`);
+         }
 
-  const playAudio = (base64Audio) => {
-    if (!base64Audio) {
-      console.warn('No audio data to play');
-      setAudioError('Voice response unavailable. Displaying text response.');
-      return;
-    }
-    try {
-      console.log('Attempting to play audio, base64 length:', base64Audio.length);
-      const audio = new Audio(`data:audio/mpeg;base64,${base64Audio}`);
-      audio.onplay = () => {
-        console.log('Audio playback started, isListening:', isListening);
-        setAudioError(null);
-        if (isListening) {
-          wasListeningRef.current = true;
-          setIsListening(false);
-          SpeechRecognition.stopListening();
-          SpeechRecognition.abortListening();
-          console.log('Mic stopped during audio playback');
-        } else {
-          wasListeningRef.current = false;
-        }
-      };
-      audio.onended = () => {
-        console.log('Audio playback ended, wasListening:', wasListeningRef.current);
-        if (wasListeningRef.current && networkStatus === 'online') {
-          setIsListening(true);
-          SpeechRecognition.startListening({ continuous: true, interimResults: true, language: user?.language || 'en-US' });
-          console.log('Mic restarted after audio playback');
-        }
-      };
-      audio.onerror = (error) => {
-        console.error('Audio playback error:', error);
-        setAudioError('Failed to play audio response. Try a different browser or check the audio format.');
-      };
-      audio.play().catch(error => {
-        console.error('Error playing audio:', error);
-        setAudioError('Failed to play audio response. Try a different browser or check the audio format.');
-      });
-    } catch (error) {
-      console.error('Error setting up audio:', error);
-      setAudioError('Error setting up audio playback. Displaying text response.');
-    }
-  };
+         const audioBlob = await response.blob();
+         const arrayBuffer = await audioBlob.arrayBuffer();
+         const audioBase64 = btoa(
+           new Uint8Array(arrayBuffer).reduce(
+             (data, byte) => data + String.fromCharCode(byte),
+             ''
+           )
+         );
+         console.log('Generated base64 audio, length:', audioBase64.length, 'first 100 chars:', audioBase64.slice(0, 100));
+         return audioBase64, null;
+       } catch (error) {
+         console.error('Murf AI TTS error:', error);
+         return null, `TTS generation failed: ${error.message}`;
+       }
+     };
+
+     const playAudio = (base64Audio) => {
+       if (!base64Audio) {
+         console.warn('No audio data to play');
+         setAudioError('Voice response unavailable. Displaying text response.');
+         return;
+       }
+       try {
+         console.log('Attempting to play audio, base64 length:', base64Audio.length);
+         const audio = new Audio(`data:audio/mpeg;base64,${base64Audio}`);
+         audio.onplay = () => {
+           console.log('Audio playback started, isListening:', isListening);
+           setAudioError(null);
+           if (isListening) {
+             wasListeningRef.current = true;
+             setIsListening(false);
+             SpeechRecognition.stopListening();
+             SpeechRecognition.abortListening();
+             console.log('Mic stopped during audio playback');
+           } else {
+             wasListeningRef.current = false;
+           }
+         };
+         audio.onended = () => {
+           console.log('Audio playback ended, wasListening:', wasListeningRef.current);
+           if (wasListeningRef.current && networkStatus === 'online') {
+             setIsListening(true);
+             SpeechRecognition.startListening({ continuous: true, interimResults: true, language: user?.language || 'en-US' });
+             console.log('Mic restarted after audio playback');
+           }
+         };
+         audio.onerror = (error) => {
+           console.error('Audio playback error:', error);
+           setAudioError('Failed to play audio response. Try a different browser or check the audio format.');
+         };
+         audio.play().catch(error => {
+           console.error('Error playing audio:', error);
+           setAudioError('Failed to play audio response. Try a different browser or check the audio format.');
+         });
+       } catch (error) {
+         console.error('Error setting up audio:', error);
+         setAudioError('Error setting up audio playback. Displaying text response.');
+       }
+     };
 
   const handleToggleListening = () => {
     console.log('Toggling listening:', isListening ? 'Stopping' : 'Starting');
