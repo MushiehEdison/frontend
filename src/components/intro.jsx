@@ -3,103 +3,71 @@ import { Link } from 'react-router-dom';
 
 const Intro = () => {
   return (
-    <div className="min-h-screen bg-white flex items-center justify-center px-4 sm:px-6 lg:px-8 relative overflow-hidden">
-      {/* Organic background shapes */}
-      <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute top-0 left-0 w-64 h-64 bg-green-100 rounded-full filter blur-3xl opacity-40 animate-float-slow"></div>
-        <div className="absolute bottom-0 right-0 w-80 h-80 bg-blue-100 rounded-full filter blur-3xl opacity-40 animate-float-slow delay-2000"></div>
-        <div className="absolute top-1/3 right-1/4 w-96 h-96 bg-teal-100 rounded-full filter blur-3xl opacity-30 animate-float-slow delay-3000"></div>
-      </div>
-
+    <div className="min-h-screen bg-white flex items-center justify-center px-4 sm:px-6 lg:px-8">
       {/* Main Content */}
-      <div className="max-w-3xl w-full text-center space-y-10 z-10 px-6 py-12">
-        {/* Logo */}
-        <div className="flex justify-center">
-          <div className="relative group">
-            <div className="w-24 h-24 sm:w-28 sm:h-28 bg-gradient-to-br from-green-400 to-blue-500 rounded-2xl flex items-center justify-center shadow-lg transform transition-all duration-500 group-hover:rotate-3 group-hover:scale-105">
-              <span className="text-3xl font-bold text-white tracking-tighter">
-                𝐻𝑒𝒶𝓁𝐼𝒜
-              </span>
-            </div>
-            <div className="absolute -z-10 -inset-2 bg-green-200/50 rounded-2xl blur-md opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-          </div>
+      <div className="max-w-2xl w-full text-center space-y-8 px-6">
+        {/* Simple Text Logo */}
+        <div className="mb-8 transition-all duration-300 hover:opacity-90">
+          <h1 className="text-5xl sm:text-6xl font-light tracking-tight text-gray-900">
+            <span className="font-medium">𝐻𝑒𝒶𝓁𝐼𝒜</span>
+          </h1>
         </div>
 
-        {/* Title */}
-        <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900">
-          <span className="relative inline-block">
-            <span className="relative z-10">Smart Health</span>
-            <span className="absolute bottom-2 left-0 w-full h-3 bg-green-200/50 z-0"></span>
-          </span>
-          <br />
-          <span className="text-transparent bg-clip-text bg-gradient-to-r from-green-500 to-blue-500">
-            Made Simple
-          </span>
-        </h1>
+        {/* Tagline */}
+        <h2 className="text-xl sm:text-2xl text-gray-600 font-light">
+          Intelligent health guidance, <span className="text-blue-600 font-medium">simplified</span>
+        </h2>
 
         {/* Description */}
-        <p className="text-lg sm:text-xl text-gray-600 leading-relaxed max-w-2xl mx-auto">
-          Your personal AI health companion. Get instant, empathetic guidance in English or French. 
-          We combine medical knowledge with cutting-edge technology to support your wellness journey.
+        <p className="text-gray-500 max-w-md mx-auto leading-relaxed mt-6">
+          Your private AI health assistant. Get clear, medically-informed guidance in English or French.
         </p>
 
         {/* CTA Buttons */}
-        <div className="flex flex-col sm:flex-row justify-center gap-5 mt-8">
+        <div className="flex flex-col sm:flex-row justify-center gap-4 mt-10">
           <Link
             to="/signin"
-            className="relative px-8 py-4 text-lg font-semibold text-white bg-gradient-to-r from-green-500 to-blue-500 rounded-xl hover:shadow-lg transition-all duration-300 hover:scale-[1.02] transform overflow-hidden group"
+            className="relative px-8 py-3 text-lg font-medium text-white bg-gray-900 rounded-md hover:bg-gray-800 transition-all duration-200 group overflow-hidden"
           >
             <span className="relative z-10">Get Started</span>
-            <span className="absolute inset-0 bg-gradient-to-r from-green-600 to-blue-600 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
+            <span className="absolute inset-0 bg-blue-600 opacity-0 group-hover:opacity-100 transition-opacity duration-300 mix-blend-overlay"></span>
           </Link>
           <Link
             to="/signup"
-            className="relative px-8 py-4 text-lg font-semibold text-gray-700 bg-white rounded-xl border-2 border-gray-200 hover:border-green-400 hover:shadow-lg transition-all duration-300 hover:scale-[1.02] transform overflow-hidden group"
+            className="relative px-8 py-3 text-lg font-medium text-gray-900 bg-white rounded-md border border-gray-300 hover:border-gray-400 transition-all duration-200 group overflow-hidden"
           >
             <span className="relative z-10">Learn More</span>
-            <span className="absolute inset-0 bg-green-50 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
+            <span className="absolute inset-0 bg-gray-100 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
           </Link>
         </div>
 
-        {/* Language Selector */}
-        <div className="flex justify-center gap-4 mt-8">
-          <button className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white text-gray-700 border border-gray-200 hover:border-green-400 hover:text-green-600 transition-all duration-200 shadow-sm hover:shadow-md">
-            <span>🇬🇧</span>
-            <span>English</span>
+        {/* Language Selector - Minimal */}
+        <div className="flex justify-center gap-3 mt-8">
+          <button className="px-4 py-2 text-gray-600 hover:text-blue-600 transition-colors duration-200 text-sm font-medium">
+            English
           </button>
-          <button className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white text-gray-700 border border-gray-200 hover:border-blue-400 hover:text-blue-600 transition-all duration-200 shadow-sm hover:shadow-md">
-            <span>🇫🇷</span>
-            <span>Français</span>
+          <span className="text-gray-300">|</span>
+          <button className="px-4 py-2 text-gray-600 hover:text-blue-600 transition-colors duration-200 text-sm font-medium">
+            Français
           </button>
         </div>
 
-        {/* Health indicators (decorative) */}
-        <div className="flex justify-center gap-6 mt-12 opacity-70">
-          <div className="flex items-center gap-2 text-sm text-gray-500">
-            <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
-            <span>Secure</span>
-          </div>
-          <div className="flex items-center gap-2 text-sm text-gray-500">
-            <div className="w-3 h-3 bg-blue-400 rounded-full animate-pulse delay-1000"></div>
-            <span>Private</span>
-          </div>
-          <div className="flex items-center gap-2 text-sm text-gray-500">
-            <div className="w-3 h-3 bg-teal-400 rounded-full animate-pulse delay-1500"></div>
-            <span>Reliable</span>
+        {/* Subtle Interactive Elements */}
+        <div className="mt-16">
+          <div className="inline-flex items-center gap-2 text-sm text-gray-400 hover:text-gray-600 transition-colors duration-200 cursor-pointer group">
+            <span>How it works</span>
+            <svg 
+              className="w-4 h-4 group-hover:translate-x-1 transition-transform duration-200" 
+              fill="none" 
+              stroke="currentColor" 
+              viewBox="0 0 24 24" 
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
           </div>
         </div>
       </div>
-
-      {/* Animations */}
-      <style jsx>{`
-        @keyframes float {
-          0%, 100% { transform: translateY(0) scale(1); }
-          50% { transform: translateY(-20px) scale(1.05); }
-        }
-        .animate-float-slow {
-          animation: float 8s ease-in-out infinite;
-        }
-      `}</style>
     </div>
   );
 };

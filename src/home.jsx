@@ -259,14 +259,16 @@ const Home = () => {
 
     if (!SpeechRecognition.browserSupportsSpeechRecognition()) {
       console.log('Browser does not support speech recognition');
-      setAudioError('Your browser does not support speech recognition.');
+      setAudioError('Your browser does not support speech recognition. Please use Chrome, Edge, or Safari.');
       return;
     }
 
+    // Determine language based on user preference or transcript
     const detectedLang = user?.language || detectCameroonLanguagePreference(transcript || '', user?.language);
-    const listeningLang = detectedLang.startsWith('fr') ? 'fr-FR' : 'en-US'; // Use fr-FR as fr-CM may not be supported
+    const listeningLang = detectedLang.startsWith('fr') ? 'fr-FR' : 'en-US';
 
     if (isListening) {
+      // Stop listening and clean up
       setIsListening(false);
       setIsMicInput(false);
       setStatus('');
@@ -274,19 +276,22 @@ const Home = () => {
       resetTranscript();
       lastTranscriptRef.current = '';
       isProcessingRef.current = false;
+
       try {
-        SpeechRecognition.stopListening();
-        SpeechRecognition.abortListening();
         if (speechRecognitionRef.current) {
+          speechRecognitionRef.current.stop();
+          speechRecognitionRef.current.abort();
           speechRecognitionRef.current.onresult = null;
           speechRecognitionRef.current.onerror = null;
           speechRecognitionRef.current.onend = null;
           speechRecognitionRef.current = null;
-          console.log('SpeechRecognition instance cleared');
+          console.log('SpeechRecognition instance stopped and cleared');
         }
+        SpeechRecognition.stopListening();
+        SpeechRecognition.abortListening();
       } catch (error) {
         console.error('Error stopping SpeechRecognition:', error);
-        setAudioError('Failed to stop speech recognition. Please try again.');
+        setAudioError('Failed to stop voice input. Please try again.');
       }
 
       if (silenceTimerRef.current) {
@@ -294,9 +299,8 @@ const Home = () => {
         silenceTimerRef.current = null;
         console.log('Silence timer cleared');
       }
-
-      console.log('Mic fully stopped and reset');
     } else {
+      // Start listening with proper initialization
       setIsListening(true);
       setIsMicInput(true);
       setAudioError(null);
@@ -305,13 +309,50 @@ const Home = () => {
       resetTranscript();
       lastTranscriptRef.current = '';
       isProcessingRef.current = false;
-      speechRecognitionRef.current = SpeechRecognition.getRecognition();
-      SpeechRecognition.startListening({ 
-        continuous: true, 
-        interimResults: true, 
-        language: listeningLang
-      });
-      console.log(`Mic started with language: ${listeningLang}`);
+
+      try {
+        // Initialize a new SpeechRecognition instance
+        speechRecognitionRef.current = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+        speechRecognitionRef.current.continuous = true;
+        speechRecognitionRef.current.interimResults = true;
+        speechRecognitionRef.current.lang = listeningLang;
+
+        // Ensure events are only set once
+        speechRecognitionRef.current.onresult = (event) => {
+          const currentTranscript = Array.from(event.results)
+            .map(result => result[0].transcript)
+            .join('');
+          console.log('Speech recognition result:', currentTranscript);
+        };
+
+        speechRecognitionRef.current.onerror = (error) => {
+          console.error('Speech recognition error:', error);
+          setAudioError(`Voice input error: ${error.error}. Please try again.`);
+          setIsListening(false);
+          setIsMicInput(false);
+          setStatus('');
+          setShowStatus(false);
+          resetTranscript();
+        };
+
+        speechRecognitionRef.current.onend = () => {
+          console.log('Speech recognition ended');
+          if (isListening && networkStatus === 'online' && !isProcessingRef.current) {
+            console.log('Restarting speech recognition');
+            SpeechRecognition.startListening({ continuous: true, interimResults: true, language: listeningLang });
+          }
+        };
+
+        SpeechRecognition.startListening({ continuous: true, interimResults: true, language: listeningLang });
+        console.log(`Mic started with language: ${listeningLang}`);
+      } catch (error) {
+        console.error('Error starting SpeechRecognition:', error);
+        setAudioError('Failed to start voice input. Please check microphone permissions.');
+        setIsListening(false);
+        setIsMicInput(false);
+        setStatus('');
+        setShowStatus(false);
+      }
     }
   };
 
@@ -383,25 +424,38 @@ const Home = () => {
       console.log('Final transcript received:', finalTranscript, 'isMicInput:', isMicInput);
       lastTranscriptRef.current = finalTranscript;
       isProcessingRef.current = true;
+
       if (silenceTimerRef.current) {
         clearTimeout(silenceTimerRef.current);
       }
+
       silenceTimerRef.current = setTimeout(() => {
         setIsMicInput(true);
         handleSendMessage(finalTranscript.trim());
         resetTranscript();
         lastTranscriptRef.current = '';
         isProcessingRef.current = false;
+
         if (isListening && networkStatus === 'online') {
           const detectedLang = detectCameroonLanguagePreference(finalTranscript, user?.language);
           const listeningLang = detectedLang.startsWith('fr') ? 'fr-FR' : 'en-US';
-          SpeechRecognition.startListening({ 
-            continuous: true, 
-            interimResults: true, 
-            language: listeningLang
-          });
+          try {
+            SpeechRecognition.startListening({ 
+              continuous: true, 
+              interimResults: true, 
+              language: listeningLang 
+            });
+            console.log(`Mic restarted with language: ${listeningLang}`);
+          } catch (error) {
+            console.error('Error restarting SpeechRecognition:', error);
+            setAudioError('Failed to restart voice input. Please try again.');
+            setIsListening(false);
+            setIsMicInput(false);
+            setStatus('');
+            setShowStatus(false);
+          }
         }
-      }, 5000);
+      }, 2000); // Reduced timeout to improve responsiveness
     }
   }, [finalTranscript, isListening, networkStatus]);
 
@@ -427,7 +481,7 @@ const Home = () => {
           }
         } catch (error) {
           console.error('Error stopping SpeechRecognition on offline:', error);
-          setAudioError('Failed to stop speech recognition due to network issue.');
+          setAudioError('Failed to stop voice input due to network issue.');
         }
         if (silenceTimerRef.current) {
           clearTimeout(silenceTimerRef.current);
