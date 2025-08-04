@@ -11,179 +11,349 @@ import { useAuth } from './App';
 
 export const ChatContext = createContext();
 
-   const Home = () => {
-     const { user, token, loading } = useAuth();
-     const { conversationId } = useParams();
-     const navigate = useNavigate();
-     const [messages, setMessages] = useState([]);
-     const [isListening, setIsListening] = useState(false);
-     const [status, setStatus] = useState('');
-     const [showStatus, setShowStatus] = useState(false);
-     const [sidebarOpen, setSidebarOpen] = useState(false);
-     const [isDarkMode, setIsDarkMode] = useState(false);
-     const [networkStatus, setNetworkStatus] = useState(navigator.onLine ? 'online' : 'offline');
-     const [isMicInput, setIsMicInput] = useState(false);
-     const [audioError, setAudioError] = useState(null);
-     const messagesEndRef = useRef(null);
-     const silenceTimerRef = useRef(null);
-     const messageIdCounter = useRef(1);
-     const wasListeningRef = useRef(false);
-     const speechRecognitionRef = useRef(null);
-     const lastTranscriptRef = useRef('');
-     const isProcessingRef = useRef(false);
+const Home = () => {
+  const { user, token, loading } = useAuth();
+  const { conversationId } = useParams();
+  const navigate = useNavigate();
+  const [messages, setMessages] = useState([]);
+  const [isListening, setIsListening] = useState(false);
+  const [status, setStatus] = useState('');
+  const [showStatus, setShowStatus] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(false);
+  const [networkStatus, setNetworkStatus] = useState(navigator.onLine ? 'online' : 'offline');
+  const [isMicInput, setIsMicInput] = useState(false);
+  const [audioError, setAudioError] = useState(null);
+  const messagesEndRef = useRef(null);
+  const silenceTimerRef = useRef(null);
+  const messageIdCounter = useRef(1);
+  const wasListeningRef = useRef(false);
+  const speechRecognitionRef = useRef(null);
+  const lastTranscriptRef = useRef('');
+  const isProcessingRef = useRef(false);
 
-     const { transcript, interimTranscript, finalTranscript, resetTranscript, listening } = useSpeechRecognition();
+  const { transcript, interimTranscript, finalTranscript, resetTranscript, listening } = useSpeechRecognition();
 
-     const MURF_API_KEY = 'ap2_c01f9127-cb28-4632-a113-951cb0800e7c'; 
-     const generateUniqueId = () => {
-       return `msg-${messageIdCounter.current++}`;
-     };
-
-     const scrollToBottom = () => {
-       console.log('Scrolling to bottom, messages length:', messages.length);
-       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-     };
-
-     const resetMessages = () => {
-       console.log('Resetting messages');
-       setMessages([]);
-       messageIdCounter.current = 1;
-       localStorage.removeItem('chatMessages');
-     };
-
-     const stripEmojis = (text) => {
-       if (!text) return '';
-       const cleanText = text.replace(/[\p{Emoji}\p{Emoji_Presentation}\p{Emoji_Modifier}\p{Emoji_Modifier_Base}\p{Emoji_Component}\u{200D}\u{FE0F}]+/gu, '').trim();
-       console.log('Original text:', text, 'Cleaned text:', cleanText);
-       return cleanText;
-     };
-     
-const generateTtsAudio = async (text, language = 'en') => {
-  if (!text || text.trim() === '') {
-    return [null, 'Invalid or empty text for audio generation'];
-  }
-
-  const payload = {
-    text: text.slice(0, 1000),
-    voiceId: 'natalie',
-    format: 'MP3'
+  const generateUniqueId = () => {
+    return `msg-${messageIdCounter.current++}`;
   };
 
-  try {
-    // Using a CORS proxy - NOT SECURE FOR PRODUCTION!
-    const proxyUrl = 'https://cors-anywhere.herokuapp.com/';
-    const targetUrl = 'https://api.murf.ai/v1/speech/synthesize';
-    
-    const response = await fetch(proxyUrl + targetUrl, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${MURF_API_KEY}`,
-        'Content-Type': 'application/json',
-        'X-Requested-With': 'XMLHttpRequest'
-      },
-      body: JSON.stringify(payload)
-    });
+  const scrollToBottom = () => {
+    console.log('Scrolling to bottom, messages length:', messages.length);
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
 
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+  const resetMessages = () => {
+    console.log('Resetting messages');
+    setMessages([]);
+    messageIdCounter.current = 1;
+    localStorage.removeItem('chatMessages');
+  };
+
+  const stripEmojis = (text) => {
+    if (!text) return '';
+    const cleanText = text.replace(/[\p{Emoji}\p{Emoji_Presentation}\p{Emoji_Modifier}\p{Emoji_Modifier_Base}\p{Emoji_Component}\u{200D}\u{FE0F}]+/gu, '').trim();
+    console.log('Original text:', text, 'Cleaned text:', cleanText);
+    return cleanText;
+  };
+
+  // Enhanced TTS for Cameroonian users with human-friendly, warm tone
+  const generateTtsAudio = async (text, language = 'en') => {
+    if (!text || text.trim() === '') {
+      return [null, 'Invalid or empty text for audio generation'];
     }
 
-    const data = await response.json();
+    // Check if Web Speech API is supported
+    if (!('speechSynthesis' in window)) {
+      return [null, 'Speech synthesis not supported in this browser'];
+    }
+
+    try {
+      // Use Web Speech API with Cameroon-friendly settings
+      await speakTextCameroonStyle(text, language);
+      return [true, null]; // Success indicator
+    } catch (error) {
+      console.error('TTS error:', error);
+      return [null, error.message];
+    }
+  };
+
+  const speakTextCameroonStyle = (text, language = 'en-US') => {
+    return new Promise((resolve, reject) => {
+      // Cancel any ongoing speech
+      window.speechSynthesis.cancel();
+
+      // Clean and prepare text for more natural speech
+      const cleanedText = prepareTextForSpeech(text);
+      
+      const utterance = new SpeechSynthesisUtterance(cleanedText);
+      
+      // Set language based on user preference
+      if (language.startsWith('fr')) {
+        utterance.lang = 'fr-FR'; // French
+      } else {
+        utterance.lang = 'en-GB'; // British English (closer to Cameroon English accent)
+      }
+      
+      // Optimize for warm, human-like speech (Cameroon style)
+      utterance.rate = 0.75;    // Slower, more conversational pace
+      utterance.pitch = 1.0;    // Natural pitch
+      utterance.volume = 0.85;  // Comfortable volume
+      
+      // Add natural pauses and emphasis
+      addNaturalEmphasis(utterance, cleanedText);
+
+      utterance.onstart = () => {
+        console.log('Speech started in', utterance.lang);
+        if (isListening) {
+          wasListeningRef.current = true;
+          setIsListening(false);
+          SpeechRecognition.stopListening();
+          SpeechRecognition.abortListening();
+          console.log('Mic stopped during speech playback');
+        } else {
+          wasListeningRef.current = false;
+        }
+        setAudioError(null);
+      };
+
+      utterance.onend = () => {
+        console.log('Speech ended, wasListening:', wasListeningRef.current);
+        if (wasListeningRef.current && networkStatus === 'online') {
+          setIsListening(true);
+          SpeechRecognition.startListening({ 
+            continuous: true, 
+            interimResults: true, 
+            language: language.startsWith('fr') ? 'fr-FR' : 'en-US'
+          });
+          console.log('Mic restarted after speech playback');
+        }
+        resolve();
+      };
+
+      utterance.onerror = (error) => {
+        console.error('Speech synthesis error:', error);
+        reject(new Error(`Speech synthesis failed: ${error.error}`));
+      };
+
+      // Get the best voice for Cameroon users
+      const voices = window.speechSynthesis.getVoices();
+      const selectedVoice = findCameroonFriendlyVoice(voices, language);
+      
+      if (selectedVoice) {
+        utterance.voice = selectedVoice;
+        console.log('Selected voice:', selectedVoice.name, 'Language:', selectedVoice.lang);
+      }
+
+      // Speak with natural rhythm
+      window.speechSynthesis.speak(utterance);
+    });
+  };
+
+  const findCameroonFriendlyVoice = (voices, language) => {
+    const isEnglish = !language.startsWith('fr');
     
-    if (data.audioUrl) {
-      // Fetch the audio file
-      const audioResponse = await fetch(proxyUrl + data.audioUrl);
-      const audioBlob = await audioResponse.blob();
-      const arrayBuffer = await audioBlob.arrayBuffer();
-      const audioBase64 = btoa(
-        new Uint8Array(arrayBuffer).reduce(
-          (data, byte) => data + String.fromCharCode(byte),
-          ''
-        )
-      );
-      return [audioBase64, null];
+    console.log('Available voices:', voices.map(v => ({ name: v.name, lang: v.lang })));
+    
+    if (isEnglish) {
+      // Priority for English (Cameroon uses British-influenced English)
+      const englishPreferences = [
+        // British English voices (closest to Cameroon English)
+        voice => voice.lang === 'en-GB' && 
+                 (voice.name.toLowerCase().includes('female') ||
+                  voice.name.toLowerCase().includes('woman') ||
+                  voice.name.toLowerCase().includes('susan') ||
+                  voice.name.toLowerCase().includes('emma') ||
+                  voice.name.toLowerCase().includes('kate')),
+        
+        // Any British English voice
+        voice => voice.lang === 'en-GB',
+        
+        // African English variants if available
+        voice => (voice.lang === 'en-ZA' || voice.lang === 'en-KE' || voice.lang === 'en-NG'),
+        
+        // Warm-sounding US English voices as fallback
+        voice => voice.lang === 'en-US' && 
+                 (voice.name.toLowerCase().includes('samantha') ||
+                  voice.name.toLowerCase().includes('allison') ||
+                  voice.name.toLowerCase().includes('susan') ||
+                  voice.name.toLowerCase().includes('karen')),
+        
+        // Any English voice
+        voice => voice.lang.startsWith('en'),
+      ];
+
+      for (const preference of englishPreferences) {
+        const matchingVoice = voices.find(preference);
+        if (matchingVoice) {
+          console.log('Selected English voice:', matchingVoice.name);
+          return matchingVoice;
+        }
+      }
+    } else {
+      // Priority for French (Cameroon uses French)
+      const frenchPreferences = [
+        // French female voices (warmer tone)
+        voice => voice.lang.startsWith('fr') && 
+                 (voice.name.toLowerCase().includes('female') ||
+                  voice.name.toLowerCase().includes('amelie') ||
+                  voice.name.toLowerCase().includes('virginie') ||
+                  voice.name.toLowerCase().includes('claire') ||
+                  voice.name.toLowerCase().includes('marie')),
+        
+        // Any French voice
+        voice => voice.lang.startsWith('fr'),
+        
+        // French Canadian as fallback
+        voice => voice.lang === 'fr-CA',
+      ];
+
+      for (const preference of frenchPreferences) {
+        const matchingVoice = voices.find(preference);
+        if (matchingVoice) {
+          console.log('Selected French voice:', matchingVoice.name);
+          return matchingVoice;
+        }
+      }
+    }
+
+    return null;
+  };
+
+  const prepareTextForSpeech = (text) => {
+    if (!text) return '';
+    
+    let cleanText = text
+      // Remove markdown formatting
+      .replace(/\*\*(.*?)\*\*/g, '$1')
+      .replace(/\*(.*?)\*/g, '$1')
+      .replace(/`(.*?)`/g, '$1')
+      
+      // Add natural pauses
+      .replace(/\./g, '. ')
+      .replace(/,/g, ', ')
+      .replace(/;/g, '; ')
+      .replace(/:/g, ': ')
+      .replace(/\?/g, '? ')
+      .replace(/!/g, '! ')
+      
+      // Handle common abbreviations for better pronunciation
+      .replace(/\bDr\./gi, 'Doctor')
+      .replace(/\bMr\./gi, 'Mister')
+      .replace(/\bMrs\./gi, 'Missus')
+      .replace(/\bMs\./gi, 'Miss')
+      .replace(/\betc\./gi, 'etcetera')
+      .replace(/\bi\.e\./gi, 'that is')
+      .replace(/\be\.g\./gi, 'for example')
+      
+      // Handle numbers for more natural speech
+      .replace(/\b(\d+)%/g, '$1 percent')
+      .replace(/\$(\d+)/g, '$1 dollars')
+      
+      // Clean up extra spaces
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    return cleanText;
+  };
+
+  const addNaturalEmphasis = (utterance, text) => {
+    // Adjust speech parameters based on content type
+    if (text.includes('!')) {
+      utterance.rate = 0.7; // Slower for emphasis
+      utterance.pitch = 1.1; // Slightly higher for excitement
     }
     
-    return [null, 'No audio URL in response'];
-  } catch (error) {
-    console.error('TTS error:', error);
-    return [null, error.message];
-  }
-};
-
-// Alternative: Use allorigins.win proxy
-const generateTtsAudioAlt = async (text, language = 'en') => {
-  try {
-    const payload = {
-      text: text.slice(0, 1000),
-      voiceId: 'natalie',
-      format: 'MP3'
-    };
-
-    // Using allorigins.win proxy
-    const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent('https://api.murf.ai/v1/speech/synthesize')}`;
+    if (text.includes('?')) {
+      utterance.pitch = 1.05; // Rising intonation for questions
+    }
     
-    const response = await fetch(proxyUrl, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${MURF_API_KEY}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(payload)
+    if (text.length > 200) {
+      utterance.rate = 0.8; // Slightly faster for longer texts
+    }
+    
+    if (text.length < 50) {
+      utterance.rate = 0.7; // Slower for short responses
+    }
+  };
+
+  // Enhanced playAudio function with Cameroon-friendly features
+  const playAudio = async (audioData, text) => {
+    if (audioData === true) {
+      console.log('Speech synthesis completed successfully');
+      return;
+    }
+    
+    if (text) {
+      try {
+        // Detect language preference (French or English)
+        const userLanguage = user?.language || 'en-US';
+        const isUserFrench = userLanguage.startsWith('fr') || 
+                            text.match(/\b(bonjour|salut|merci|au revoir|oui|non|comment|pourquoi)\b/i);
+        
+        const speechLanguage = isUserFrench ? 'fr-FR' : 'en-GB';
+        
+        await speakTextCameroonStyle(text, speechLanguage);
+      } catch (error) {
+        console.error('Error playing speech:', error);
+        setAudioError('Voice playback failed. Text response displayed.');
+      }
+    } else {
+      setAudioError('No text available for speech synthesis.');
+    }
+  };
+
+  // Voice loading with Cameroon-specific preferences
+  const loadVoicesForCameroon = () => {
+    return new Promise((resolve) => {
+      const checkVoices = () => {
+        const voices = window.speechSynthesis.getVoices();
+        if (voices.length > 0) {
+          // Log available voices for debugging
+          console.log('Available voices for Cameroon users:');
+          voices.forEach(voice => {
+            if (voice.lang.startsWith('en') || voice.lang.startsWith('fr')) {
+              console.log(`- ${voice.name} (${voice.lang})`);
+            }
+          });
+          resolve(voices);
+        } else {
+          // Voices not loaded yet, wait for the event
+          window.speechSynthesis.onvoiceschanged = checkVoices;
+        }
+      };
+      checkVoices();
     });
+  };
 
-    // Handle response...
-    const data = await response.json();
-    // Process audio data...
+  // Language detection helper
+  const detectCameroonLanguagePreference = (text, userLanguage) => {
+    // Common French words used in Cameroon
+    const frenchIndicators = [
+      'bonjour', 'bonsoir', 'salut', 'comment', 'allez', 'vous', 'ça', 'va',
+      'merci', 'beaucoup', 'au revoir', 'oui', 'non', 'peut-être', 'pourquoi',
+      'comment', 'quand', 'où', 'qui', 'quoi', 'pardon', 'excusez', 'moi',
+      'santé', 'maladie', 'docteur', 'hôpital', 'médicament', 'traitement'
+    ];
     
-  } catch (error) {
-    return [null, error.message];
-  }
-};
-     const playAudio = (base64Audio) => {
-       if (!base64Audio) {
-         console.warn('No audio data to play');
-         setAudioError('Voice response unavailable. Displaying text response.');
-         return;
-       }
-       try {
-         console.log('Attempting to play audio, base64 length:', base64Audio.length);
-         const audio = new Audio(`data:audio/mpeg;base64,${base64Audio}`);
-         audio.onplay = () => {
-           console.log('Audio playback started, isListening:', isListening);
-           setAudioError(null);
-           if (isListening) {
-             wasListeningRef.current = true;
-             setIsListening(false);
-             SpeechRecognition.stopListening();
-             SpeechRecognition.abortListening();
-             console.log('Mic stopped during audio playback');
-           } else {
-             wasListeningRef.current = false;
-           }
-         };
-         audio.onended = () => {
-           console.log('Audio playback ended, wasListening:', wasListeningRef.current);
-           if (wasListeningRef.current && networkStatus === 'online') {
-             setIsListening(true);
-             SpeechRecognition.startListening({ continuous: true, interimResults: true, language: user?.language || 'en-US' });
-             console.log('Mic restarted after audio playback');
-           }
-         };
-         audio.onerror = (error) => {
-           console.error('Audio playback error:', error);
-           setAudioError('Failed to play audio response. Try a different browser or check the audio format.');
-         };
-         audio.play().catch(error => {
-           console.error('Error playing audio:', error);
-           setAudioError('Failed to play audio response. Try a different browser or check the audio format.');
-         });
-       } catch (error) {
-         console.error('Error setting up audio:', error);
-         setAudioError('Error setting up audio playback. Displaying text response.');
-       }
-     };
-
+    // Common English words with Cameroon context
+    const englishIndicators = [
+      'hello', 'good', 'morning', 'evening', 'how', 'are', 'you', 'fine',
+      'thank', 'welcome', 'please', 'sorry', 'excuse', 'me', 'yes', 'no',
+      'health', 'doctor', 'hospital', 'medicine', 'treatment', 'disease'
+    ];
+    
+    const textLower = text.toLowerCase();
+    const frenchMatches = frenchIndicators.filter(word => textLower.includes(word)).length;
+    const englishMatches = englishIndicators.filter(word => textLower.includes(word)).length;
+    
+    // User preference takes priority
+    if (userLanguage?.startsWith('fr')) return 'fr-FR';
+    if (userLanguage?.startsWith('en')) return 'en-GB';
+    
+    // Auto-detect based on content
+    return frenchMatches > englishMatches ? 'fr-FR' : 'en-GB';
+  };
 
   const handleToggleListening = () => {
     console.log('Toggling listening:', isListening ? 'Stopping' : 'Starting');
@@ -389,6 +559,25 @@ const generateTtsAudioAlt = async (text, language = 'en') => {
     };
   }, [isListening]);
 
+  // Add voice initialization for Cameroon users
+  useEffect(() => {
+    if ('speechSynthesis' in window) {
+      loadVoicesForCameroon().then(voices => {
+        console.log(`Loaded ${voices.length} voices for Cameroon users`);
+        
+        // Show available French and English voices
+        const frenchVoices = voices.filter(v => v.lang.startsWith('fr'));
+        const englishVoices = voices.filter(v => v.lang.startsWith('en'));
+        
+        console.log(`French voices available: ${frenchVoices.length}`);
+        console.log(`English voices available: ${englishVoices.length}`);
+      });
+    } else {
+      console.warn('Speech synthesis not supported in this browser');
+      setAudioError('Voice features not supported in this browser. Please use Chrome, Firefox, or Safari.');
+    }
+  }, []);
+
   const handleSendMessage = async (text) => {
     console.log('handleSendMessage called with text:', text, 'isMicInput:', isMicInput);
     const token = localStorage.getItem('token');
@@ -502,7 +691,7 @@ const generateTtsAudioAlt = async (text, language = 'en') => {
           const [audioBase64, audioError] = await generateTtsAudio(cleanText, user?.language || 'en');
           if (audioBase64) {
             console.log('Playing audio response');
-            playAudio(audioBase64);
+            playAudio(audioBase64, cleanText);
           } else {
             console.warn('No audio generated:', audioError);
             setAudioError(audioError || 'Voice response unavailable. Displaying text response.');
@@ -542,7 +731,6 @@ const generateTtsAudioAlt = async (text, language = 'en') => {
       isProcessingRef.current = false;
     }
   };
-
   const updatedStyles = `
     .ripple-container {
       position: relative;
