@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, createContext, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useRef, createContext } from 'react';
 import { Mic, Send, User, Heart, Menu, X, Edit3, Moon, Sun, Phone, Calendar, Activity, WifiOff } from 'lucide-react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import SpeechRecognition, { useSpeechRecognition } from 'react-speech-recognition';
@@ -25,63 +25,13 @@ const Home = () => {
   const [networkStatus, setNetworkStatus] = useState(navigator.onLine ? 'online' : 'offline');
   const [isMicInput, setIsMicInput] = useState(false);
   const [audioError, setAudioError] = useState(null);
-  const [micPermission, setMicPermission] = useState('unknown');
   const messagesEndRef = useRef(null);
   const silenceTimerRef = useRef(null);
   const messageIdCounter = useRef(1);
   const wasListeningRef = useRef(false);
-  const isProcessingAudioRef = useRef(false);
-  const lastTranscriptRef = useRef('');
-  const speechTimeoutRef = useRef(null);
+  const speechRecognitionRef = useRef(null);
 
   const { transcript, interimTranscript, finalTranscript, resetTranscript, listening } = useSpeechRecognition();
-
-  // Check microphone permission
-  const checkMicrophonePermission = useCallback(async () => {
-    try {
-      if (navigator.permissions) {
-        const result = await navigator.permissions.query({ name: 'microphone' });
-        setMicPermission(result.state);
-        
-        result.addEventListener('change', () => {
-          setMicPermission(result.state);
-          if (result.state === 'denied' && isListening) {
-            handleStopListening();
-            setAudioError('Microphone permission denied. Please enable in browser settings.');
-          }
-        });
-        
-        return result.state !== 'denied';
-      } else {
-        // Fallback for browsers without permissions API
-        try {
-          await navigator.mediaDevices.getUserMedia({ audio: true });
-          setMicPermission('granted');
-          return true;
-        } catch (error) {
-          setMicPermission('denied');
-          return false;
-        }
-      }
-    } catch (error) {
-      console.warn('Could not check microphone permission:', error);
-      setMicPermission('unknown');
-      return true; // Assume granted if can't check
-    }
-  }, [isListening]);
-
-  // Debounced function to prevent rapid state changes
-  const debounce = (func, wait) => {
-    let timeout;
-    return function executedFunction(...args) {
-      const later = () => {
-        clearTimeout(timeout);
-        func(...args);
-      };
-      clearTimeout(timeout);
-      timeout = setTimeout(later, wait);
-    };
-  };
 
   const generateUniqueId = () => {
     return `msg-${messageIdCounter.current++}`;
@@ -106,194 +56,108 @@ const Home = () => {
     return cleanText;
   };
 
-  const clearAllTimers = () => {
-    if (silenceTimerRef.current) {
-      clearTimeout(silenceTimerRef.current);
-      silenceTimerRef.current = null;
-    }
-    if (speechTimeoutRef.current) {
-      clearTimeout(speechTimeoutRef.current);
-      speechTimeoutRef.current = null;
-    }
-  };
-
-  const handleStopListening = useCallback(() => {
-    console.log('Stopping listening');
-    setIsListening(false);
-    setIsMicInput(false);
-    setStatus('');
-    setShowStatus(false);
-    clearAllTimers();
-    
-    try {
-      SpeechRecognition.stopListening();
-      SpeechRecognition.abortListening();
-    } catch (error) {
-      console.error('Error stopping SpeechRecognition:', error);
-    }
-    
-    resetTranscript();
-    lastTranscriptRef.current = '';
-    console.log('Voice input fully stopped');
-  }, [resetTranscript]);
-
-  const handleStartListening = useCallback(async () => {
-    console.log('Starting listening');
-    
-    // Check network status
-    if (networkStatus === 'offline') {
-      setAudioError('No internet connection. Voice input requires an active connection.');
-      return;
-    }
-
-    // Check browser support
-    if (!SpeechRecognition.browserSupportsSpeechRecognition()) {
-      setAudioError('Your browser does not support speech recognition.');
-      return;
-    }
-
-    // Check microphone permission
-    const hasPermission = await checkMicrophonePermission();
-    if (!hasPermission) {
-      setAudioError('Microphone permission is required for voice input.');
-      return;
-    }
-
-    // Clear any existing errors and timers
-    setAudioError(null);
-    clearAllTimers();
-    
-    // Reset state
-    resetTranscript();
-    lastTranscriptRef.current = '';
-    
-    // Start listening
-    setIsListening(true);
-    setIsMicInput(true);
-    setStatus('listening...');
-    setShowStatus(true);
-    
-    try {
-      SpeechRecognition.startListening({ 
-        continuous: true, 
-        interimResults: true, 
-        language: user?.language || 'en-US' 
-      });
-      console.log('Voice input started successfully');
-    } catch (error) {
-      console.error('Error starting SpeechRecognition:', error);
-      setAudioError('Failed to start voice input. Please try again.');
-      handleStopListening();
-    }
-  }, [networkStatus, user?.language, checkMicrophonePermission, resetTranscript, handleStopListening]);
-
   const playAudio = (base64Audio) => {
     if (!base64Audio) {
       console.warn('No audio data to play');
       setAudioError('No audio data received. Displaying text response.');
       return;
     }
-    
     try {
-      isProcessingAudioRef.current = true;
       const audio = new Audio(`data:audio/mp3;base64,${base64Audio}`);
-      
       audio.onplay = () => {
         console.log('Audio playback started, isListening:', isListening);
         setAudioError(null);
         if (isListening) {
           wasListeningRef.current = true;
-          handleStopListening();
-          console.log('Voice input paused during audio playback');
+          setIsListening(false);
+          SpeechRecognition.stopListening();
+          SpeechRecognition.abortListening();
+          console.log('Mic stopped during audio playback');
         } else {
           wasListeningRef.current = false;
         }
       };
-      
       audio.onended = () => {
         console.log('Audio playback ended, wasListening:', wasListeningRef.current);
-        isProcessingAudioRef.current = false;
-        
-        // Automatically resume listening after AI response for continuous conversation
         if (wasListeningRef.current && networkStatus === 'online') {
-          setTimeout(() => {
-            // Double-check conditions before restarting
-            if (!isListening && !isProcessingAudioRef.current && networkStatus === 'online') {
-              handleStartListening();
-              console.log('Voice input resumed after audio playback for continuous conversation');
-            }
-          }, 1000); // Shorter delay for better conversation flow
+          setIsListening(true);
+          SpeechRecognition.startListening({ continuous: true, interimResults: true, language: user?.language || 'en-US' });
+          console.log('Mic restarted after audio playback');
         }
       };
-      
       audio.onerror = (error) => {
         console.error('Audio playback error:', error);
-        isProcessingAudioRef.current = false;
         setAudioError('Failed to play audio response. Displaying text response.');
       };
-      
       audio.play().catch(error => {
         console.error('Error playing audio:', error);
-        isProcessingAudioRef.current = false;
         setAudioError('Failed to play audio response. Displaying text response.');
       });
     } catch (error) {
       console.error('Error setting up audio:', error);
-      isProcessingAudioRef.current = false;
       setAudioError('Error setting up audio playback. Displaying text response.');
     }
   };
 
-  const handleToggleListening = useCallback(() => {
+  const handleToggleListening = () => {
     console.log('Toggling listening:', isListening ? 'Stopping' : 'Starting');
-    
-    if (isListening) {
-      handleStopListening();
-    } else {
-      handleStartListening();
-    }
-  }, [isListening, handleStartListening, handleStopListening]);
-
-  // Debounced version to prevent rapid clicks
-  const debouncedToggleListening = useMemo(
-    () => debounce(handleToggleListening, 300),
-    [handleToggleListening]
-  );
-
-  // Handle transcript processing with improved timing and duplicate prevention
-  const processTranscript = useCallback((transcript) => {
-    if (!transcript.trim() || transcript === lastTranscriptRef.current || isProcessingAudioRef.current) {
+    if (networkStatus === 'offline') {
+      console.log('Cannot toggle listening: Offline');
+      setAudioError('No internet connection. Voice input requires an active connection.');
       return;
     }
-    
-    // Additional check to prevent processing the same transcript multiple times
-    if (silenceTimerRef.current) {
-      return; // Already processing a transcript
-    }
-    
-    lastTranscriptRef.current = transcript;
-    clearAllTimers();
-    
-    // Set a timeout to process the transcript after a pause in speech
-    silenceTimerRef.current = setTimeout(() => {
-      if (transcript.trim() && isListening && !isProcessingAudioRef.current) {
-        console.log('Processing final transcript:', transcript);
-        
-        // Stop listening immediately to prevent multiple sends
-        handleStopListening();
-        
-        setIsMicInput(true);
-        handleSendMessage(transcript.trim());
-        resetTranscript();
-        lastTranscriptRef.current = '';
-      }
-    }, 2500);
-  }, [isListening, resetTranscript, handleStopListening]);
 
-  // Initialize microphone permission check
-  useEffect(() => {
-    checkMicrophonePermission();
-  }, [checkMicrophonePermission]);
+    if (!SpeechRecognition.browserSupportsSpeechRecognition()) {
+      console.log('Browser does not support speech recognition');
+      setAudioError('Your browser does not support speech recognition.');
+      return;
+    }
+
+    if (isListening) {
+      setIsListening(false);
+      setIsMicInput(false);
+      setStatus('');
+      setShowStatus(false);
+      resetTranscript();
+      
+      try {
+        SpeechRecognition.stopListening();
+        SpeechRecognition.abortListening();
+        if (speechRecognitionRef.current) {
+          speechRecognitionRef.current.onresult = null;
+          speechRecognitionRef.current.onerror = null;
+          speechRecognitionRef.current.onend = null;
+          speechRecognitionRef.current = null;
+          console.log('SpeechRecognition instance cleared');
+        }
+      } catch (error) {
+        console.error('Error stopping SpeechRecognition:', error);
+      }
+
+      if (silenceTimerRef.current) {
+        clearTimeout(silenceTimerRef.current);
+        silenceTimerRef.current = null;
+        console.log('Silence timer cleared');
+      }
+
+      console.log('Mic fully stopped and reset');
+    } else {
+      setIsListening(true);
+      setIsMicInput(true);
+      setAudioError(null);
+      setStatus('listening...');
+      setShowStatus(true);
+      resetTranscript();
+      
+      speechRecognitionRef.current = SpeechRecognition.getRecognition();
+      SpeechRecognition.startListening({ 
+        continuous: true, 
+        interimResults: true, 
+        language: user?.language || 'en-US' 
+      });
+      console.log('Mic started with new SpeechRecognition instance');
+    }
+  };
 
   useEffect(() => {
     console.log('Saving messages to localStorage:', messages);
@@ -358,63 +222,84 @@ const Home = () => {
     scrollToBottom();
   }, [messages]);
 
-  // Handle final transcript with improved processing
   useEffect(() => {
-    if (finalTranscript.trim() && isListening && !isProcessingAudioRef.current) {
-      console.log('Final transcript received:', finalTranscript);
-      processTranscript(finalTranscript);
+    if (finalTranscript.trim()) {
+      console.log('Final transcript received:', finalTranscript, 'isMicInput:', isMicInput);
+      if (silenceTimerRef.current) {
+        clearTimeout(silenceTimerRef.current);
+      }
+      silenceTimerRef.current = setTimeout(() => {
+        setIsMicInput(true); // Ensure isMicInput is true for voice inputs
+        handleSendMessage(finalTranscript.trim());
+        resetTranscript();
+        if (isListening && networkStatus === 'online') {
+          SpeechRecognition.startListening({ continuous: true, interimResults: true, language: user?.language || 'en-US' });
+        }
+      }, 3000);
     }
-  }, [finalTranscript, isListening, processTranscript]);
+  }, [finalTranscript, isListening, networkStatus]);
 
-  // Handle network status changes with improved cleanup
   useEffect(() => {
     const handleNetworkChange = () => {
-      const newStatus = navigator.onLine ? 'online' : 'offline';
-      console.log('Network status changed:', newStatus);
-      setNetworkStatus(newStatus);
-      
-      if (newStatus === 'offline' && isListening) {
-        handleStopListening();
+      setNetworkStatus(navigator.onLine ? 'online' : 'offline');
+      if (!navigator.onLine && isListening) {
+        setIsListening(false);
+        setIsMicInput(false);
+        setStatus('');
+        setShowStatus(false);
+        resetTranscript();
+        try {
+          SpeechRecognition.stopListening();
+          SpeechRecognition.abortListening();
+          if (speechRecognitionRef.current) {
+            speechRecognitionRef.current.onresult = null;
+            speechRecognitionRef.current.onerror = null;
+            speechRecognitionRef.current.onend = null;
+            speechRecognitionRef.current = null;
+          }
+        } catch (error) {
+          console.error('Error stopping SpeechRecognition on offline:', error);
+        }
+        if (silenceTimerRef.current) {
+          clearTimeout(silenceTimerRef.current);
+          silenceTimerRef.current = null;
+        }
         setAudioError('No internet connection. Voice input requires an active connection.');
+        console.log('Mic stopped due to offline status');
       }
     };
 
     window.addEventListener('online', handleNetworkChange);
     window.addEventListener('offline', handleNetworkChange);
 
-    // Cleanup function
     return () => {
       window.removeEventListener('online', handleNetworkChange);
       window.removeEventListener('offline', handleNetworkChange);
-      clearAllTimers();
-      
+      if (silenceTimerRef.current) {
+        clearTimeout(silenceTimerRef.current);
+      }
       if (isListening) {
         try {
           SpeechRecognition.stopListening();
           SpeechRecognition.abortListening();
+          if (speechRecognitionRef.current) {
+            speechRecognitionRef.current.onresult = null;
+            speechRecognitionRef.current.onerror = null;
+            speechRecognitionRef.current.onend = null;
+            speechRecognitionRef.current = null;
+          }
         } catch (error) {
           console.error('Error stopping SpeechRecognition on unmount:', error);
         }
       }
     };
-  }, [isListening, handleStopListening]);
+  }, [isListening]);
 
   const handleSendMessage = async (text, retryCount = 0) => {
     console.log('handleSendMessage called with text:', text, 'isMicInput:', isMicInput, 'retryCount:', retryCount);
-    
-    // Prevent duplicate sends by checking if already processing
-    if (isProcessingAudioRef.current) {
-      console.log('Already processing a message, skipping duplicate send');
-      return;
-    }
-    
-    // Set processing flag immediately
-    isProcessingAudioRef.current = true;
-    
     const token = localStorage.getItem('token');
     if (!token) {
       console.error('No token found in localStorage');
-      isProcessingAudioRef.current = false; // Reset flag
       setMessages((prev) => [
         ...prev,
         {
@@ -435,7 +320,6 @@ const Home = () => {
       const exp = decoded.exp * 1000;
       if (Date.now() >= exp) {
         console.error('Token is expired');
-        isProcessingAudioRef.current = false; // Reset flag
         setMessages((prev) => [
           ...prev,
           {
@@ -451,7 +335,6 @@ const Home = () => {
       }
     } catch (error) {
       console.error('Invalid token format:', error);
-      isProcessingAudioRef.current = false; // Reset flag
       setMessages((prev) => [
         ...prev,
         {
@@ -535,16 +418,6 @@ const Home = () => {
             if (aiResponse && aiResponse.text) {
               setMessages((prev) => [...prev.filter((m) => m.id !== newMessage.id), ...formattedMessages]);
             }
-            
-            // Resume listening even without audio for continuous conversation
-            if (wasListeningRef.current && networkStatus === 'online') {
-              setTimeout(() => {
-                if (!isListening && !isProcessingAudioRef.current && networkStatus === 'online') {
-                  handleStartListening();
-                  console.log('Voice input resumed after text-only response');
-                }
-              }, 1000);
-            }
           }
         }
         if (!isValidId && data.id) {
@@ -562,22 +435,8 @@ const Home = () => {
         setMessages((prev) => [...prev, errorResponse]);
         if (isMicInput) {
           setAudioError(data.audio_error || 'Voice response unavailable. Displaying text response.');
-          
-          // Resume listening after error response for continuous conversation
-          if (wasListeningRef.current && networkStatus === 'online') {
-            setTimeout(() => {
-              if (!isListening && !isProcessingAudioRef.current && networkStatus === 'online') {
-                handleStartListening();
-                console.log('Voice input resumed after error response');
-              }
-            }, 1000);
-          }
         }
       }
-      
-      // Reset processing flag after successful completion
-      isProcessingAudioRef.current = false;
-      
     } catch (error) {
       console.error('Error during POST request:', error);
       if (retryCount < maxRetries) {
@@ -587,7 +446,6 @@ const Home = () => {
       }
       console.error('Max retries reached, giving up');
       setShowStatus(false);
-      isProcessingAudioRef.current = false; // Reset flag
       const errorResponse = {
         id: generateUniqueId(),
         text: `Failed to connect to server: ${error.message}. Your message was sent but not saved. Please try again.`,
@@ -597,16 +455,6 @@ const Home = () => {
       setMessages((prev) => [...prev, errorResponse]);
       if (isMicInput) {
         setAudioError('Failed to connect to server for audio response. Displaying text response.');
-        
-        // Resume listening after network error for continuous conversation
-        if (wasListeningRef.current && networkStatus === 'online') {
-          setTimeout(() => {
-            if (!isListening && !isProcessingAudioRef.current && networkStatus === 'online') {
-              handleStartListening();
-              console.log('Voice input resumed after network error');
-            }
-          }, 2000); // Longer delay for network errors
-        }
       }
     }
   };
@@ -697,12 +545,6 @@ const Home = () => {
                   <p className="text-sm font-medium">No internet connection. Voice input requires an active connection.</p>
                 </div>
               )}
-              {micPermission === 'denied' && (
-                <div className="flex items-center text-red-500 mb-2">
-                  <Mic className="w-5 h-5 mr-2" />
-                  <p className="text-sm font-medium">Microphone permission denied. Please enable in browser settings.</p>
-                </div>
-              )}
               <div className="ripple-container">
                 <div className="ripple"></div>
                 <div className="ripple"></div>
@@ -713,7 +555,7 @@ const Home = () => {
                 {transcript || (status === 'listening' ? 'Listening...' : 'Processing...')}
               </p>
               <button
-                onClick={debouncedToggleListening}
+                onClick={handleToggleListening}
                 className={`mt-4 p-2 rounded-full border-2 border-red-500 ${isDarkMode ? 'text-red-400 hover:text-white active:text-white' : 'text-red-500 hover:text-white active:text-white'} hover:bg-red-500 active:bg-red-500 transition-colors`}
                 aria-label="Stop listening"
               >
@@ -726,7 +568,7 @@ const Home = () => {
             <InputArea
               onSendMessage={handleSendMessage}
               isListening={isListening}
-              onToggleListening={debouncedToggleListening}
+              onToggleListening={handleToggleListening}
               isDarkMode={isDarkMode}
               transcript={transcript}
               interimTranscript={interimTranscript}
