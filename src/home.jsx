@@ -9,7 +9,6 @@ import InputArea from './components/homepagecomponents/InputArea';
 import Navbar from './components/homepagecomponents/Navbar';
 import { useAuth } from './App';
 
-// Create a context for resetting messages
 export const ChatContext = createContext();
 
 const Home = () => {
@@ -30,7 +29,8 @@ const Home = () => {
   const messageIdCounter = useRef(1);
   const wasListeningRef = useRef(false);
   const speechRecognitionRef = useRef(null);
-  const lastTranscriptRef = useRef(''); // Track last processed transcript
+  const lastTranscriptRef = useRef('');
+  const isProcessingRef = useRef(false); // Lock for message processing
 
   const { transcript, interimTranscript, finalTranscript, resetTranscript, listening } = useSpeechRecognition();
 
@@ -120,7 +120,8 @@ const Home = () => {
       setStatus('');
       setShowStatus(false);
       resetTranscript();
-      lastTranscriptRef.current = ''; // Reset transcript tracking
+      lastTranscriptRef.current = '';
+      isProcessingRef.current = false; // Reset processing lock
       try {
         SpeechRecognition.stopListening();
         SpeechRecognition.abortListening();
@@ -149,7 +150,8 @@ const Home = () => {
       setStatus('listening...');
       setShowStatus(true);
       resetTranscript();
-      lastTranscriptRef.current = ''; // Reset transcript tracking
+      lastTranscriptRef.current = '';
+      isProcessingRef.current = false; // Reset processing lock
       speechRecognitionRef.current = SpeechRecognition.getRecognition();
       SpeechRecognition.startListening({ 
         continuous: true, 
@@ -224,9 +226,10 @@ const Home = () => {
   }, [messages]);
 
   useEffect(() => {
-    if (finalTranscript.trim() && finalTranscript !== lastTranscriptRef.current) {
+    if (finalTranscript.trim() && finalTranscript !== lastTranscriptRef.current && !isProcessingRef.current) {
       console.log('Final transcript received:', finalTranscript, 'isMicInput:', isMicInput);
-      lastTranscriptRef.current = finalTranscript; // Update last processed transcript
+      lastTranscriptRef.current = finalTranscript;
+      isProcessingRef.current = true; // Lock processing
       if (silenceTimerRef.current) {
         clearTimeout(silenceTimerRef.current);
       }
@@ -234,7 +237,8 @@ const Home = () => {
         setIsMicInput(true);
         handleSendMessage(finalTranscript.trim());
         resetTranscript();
-        lastTranscriptRef.current = ''; // Clear after sending
+        lastTranscriptRef.current = '';
+        isProcessingRef.current = false; // Unlock after sending
         if (isListening && networkStatus === 'online') {
           SpeechRecognition.startListening({ continuous: true, interimResults: true, language: user?.language || 'en-US' });
         }
@@ -251,7 +255,8 @@ const Home = () => {
         setStatus('');
         setShowStatus(false);
         resetTranscript();
-        lastTranscriptRef.current = ''; // Reset transcript tracking
+        lastTranscriptRef.current = '';
+        isProcessingRef.current = false; // Reset processing lock
         try {
           SpeechRecognition.stopListening();
           SpeechRecognition.abortListening();
@@ -316,6 +321,7 @@ const Home = () => {
       if (isMicInput) {
         setAudioError('Please sign in to use voice features.');
       }
+      isProcessingRef.current = false; // Unlock processing
       return;
     }
 
@@ -335,6 +341,7 @@ const Home = () => {
         ]);
         localStorage.removeItem('token');
         navigate('/signin');
+        isProcessingRef.current = false; // Unlock processing
         return;
       }
     } catch (error) {
@@ -350,6 +357,7 @@ const Home = () => {
       ]);
       localStorage.removeItem('token');
       navigate('/signin');
+      isProcessingRef.current = false; // Unlock processing
       return;
     }
 
@@ -434,6 +442,7 @@ const Home = () => {
           setAudioError(data.audio_error || 'Voice response unavailable. Displaying text response.');
         }
       }
+      isProcessingRef.current = false; // Unlock processing
     } catch (error) {
       console.error('Error during POST request:', error);
       if (retryCount < maxRetries) {
@@ -453,6 +462,7 @@ const Home = () => {
       if (isMicInput) {
         setAudioError('Failed to connect to server for audio response. Displaying text response.');
       }
+      isProcessingRef.current = false; // Unlock processing
     }
   };
 
@@ -492,19 +502,16 @@ const Home = () => {
     <ChatContext.Provider value={{ resetMessages }}>
       <div className={`min-h-[100dvh] ${isDarkMode ? 'bg-gray-900' : 'bg-gray-50'} transition-colors duration-300 flex flex-col`}>
         <style>{updatedStyles}</style>
-
         <Navbar 
           isDarkMode={isDarkMode}
           toggleDarkMode={() => setIsDarkMode(!isDarkMode)}
           toggleSidebar={() => setSidebarOpen(true)}
         />
-        
         <Sidebar 
           isOpen={sidebarOpen}
           onClose={() => setSidebarOpen(false)}
           isDarkMode={isDarkMode}
         />
-        
         <main className="flex-1 pt-16 pb-20 overflow-hidden">
           <div className="container mx-auto px-2 sm:px-4 lg:px-6 max-w-3xl flex flex-col min-h-0 h-full">
             <div className="flex justify-center my-4">
@@ -515,7 +522,6 @@ const Home = () => {
                 {audioError}
               </div>
             )}
-            
             <div className="flex-1 space-y-4 overflow-y-auto overflow-x-hidden overscroll-y-contain scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-transparent px-1">
               <div className="w-full max-w-full">
                 {messages.map((message) => (
@@ -532,7 +538,6 @@ const Home = () => {
             </div>
           </div>
         </main>
-        
         {isListening ? (
           <div className={`fixed bottom-0 left-0 right-0 h-1/3 ${isDarkMode ? 'bg-gray-800' : 'bg-white'} border-t ${isDarkMode ? 'border-gray-700' : 'border-gray-200'} rounded-t-xl transition-transform duration-300 ease-in-out transform translate-y-0 z-50`}>
             <div className="flex flex-col items-center justify-center h-full px-2 sm:px-4">
