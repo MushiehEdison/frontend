@@ -11,53 +11,52 @@ import { useAuth } from './App';
 
 export const ChatContext = createContext();
 
-const Home = () => {
-  const { user, token, loading } = useAuth();
-  const { conversationId } = useParams();
-  const navigate = useNavigate();
-  const [messages, setMessages] = useState([]);
-  const [isListening, setIsListening] = useState(false);
-  const [status, setStatus] = useState('');
-  const [showStatus, setShowStatus] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [isDarkMode, setIsDarkMode] = useState(false);
-  const [networkStatus, setNetworkStatus] = useState(navigator.onLine ? 'online' : 'offline');
-  const [isMicInput, setIsMicInput] = useState(false);
-  const [audioError, setAudioError] = useState(null);
-  const messagesEndRef = useRef(null);
-  const silenceTimerRef = useRef(null);
-  const messageIdCounter = useRef(1);
-  const wasListeningRef = useRef(false);
-  const speechRecognitionRef = useRef(null);
-  const lastTranscriptRef = useRef('');
-  const isProcessingRef = useRef(false);
+   const Home = () => {
+     const { user, token, loading } = useAuth();
+     const { conversationId } = useParams();
+     const navigate = useNavigate();
+     const [messages, setMessages] = useState([]);
+     const [isListening, setIsListening] = useState(false);
+     const [status, setStatus] = useState('');
+     const [showStatus, setShowStatus] = useState(false);
+     const [sidebarOpen, setSidebarOpen] = useState(false);
+     const [isDarkMode, setIsDarkMode] = useState(false);
+     const [networkStatus, setNetworkStatus] = useState(navigator.onLine ? 'online' : 'offline');
+     const [isMicInput, setIsMicInput] = useState(false);
+     const [audioError, setAudioError] = useState(null);
+     const messagesEndRef = useRef(null);
+     const silenceTimerRef = useRef(null);
+     const messageIdCounter = useRef(1);
+     const wasListeningRef = useRef(false);
+     const speechRecognitionRef = useRef(null);
+     const lastTranscriptRef = useRef('');
+     const isProcessingRef = useRef(false);
 
-  const { transcript, interimTranscript, finalTranscript, resetTranscript, listening } = useSpeechRecognition();
+     const { transcript, interimTranscript, finalTranscript, resetTranscript, listening } = useSpeechRecognition();
 
-  // Hardcoded Murf AI API key (not secure, for simplicity per request)
-  const MURF_API_KEY = 'ap2_1ed94e55-aa96-4c3e-bce3-495c9e3c8d4a'; 
-  const generateUniqueId = () => {
-    return `msg-${messageIdCounter.current++}`;
-  };
+     const MURF_API_KEY = 'ap2_1ed94e55-aa96-4c3e-bce3-495c9e3c8d4a'; 
+     const generateUniqueId = () => {
+       return `msg-${messageIdCounter.current++}`;
+     };
 
-  const scrollToBottom = () => {
-    console.log('Scrolling to bottom, messages length:', messages.length);
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
+     const scrollToBottom = () => {
+       console.log('Scrolling to bottom, messages length:', messages.length);
+       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+     };
 
-  const resetMessages = () => {
-    console.log('Resetting messages');
-    setMessages([]);
-    messageIdCounter.current = 1;
-    localStorage.removeItem('chatMessages');
-  };
+     const resetMessages = () => {
+       console.log('Resetting messages');
+       setMessages([]);
+       messageIdCounter.current = 1;
+       localStorage.removeItem('chatMessages');
+     };
 
-  const stripEmojis = (text) => {
-    if (!text) return '';
-    const cleanText = text.replace(/[\p{Emoji}\p{Emoji_Presentation}\p{Emoji_Modifier}\p{Emoji_Modifier_Base}\p{Emoji_Component}\u{200D}\u{FE0F}]+/gu, '').trim();
-    console.log('Original text:', text, 'Cleaned text:', cleanText);
-    return cleanText;
-  };
+     const stripEmojis = (text) => {
+       if (!text) return '';
+       const cleanText = text.replace(/[\p{Emoji}\p{Emoji_Presentation}\p{Emoji_Modifier}\p{Emoji_Modifier_Base}\p{Emoji_Component}\u{200D}\u{FE0F}]+/gu, '').trim();
+       console.log('Original text:', text, 'Cleaned text:', cleanText);
+       return cleanText;
+     };
 
      const generateTtsAudio = async (text, language = 'en') => {
        if (!text || text.trim() === '') {
@@ -70,13 +69,10 @@ const Home = () => {
          return null, 'Murf AI API key is missing or invalid';
        }
 
-       const voiceMap = { 'en': 'en-US-1-natalie', 'fr': 'fr-FR-1-denise' }; // Updated voice IDs
+       const voiceMap = { 'en': 'en-US-natalie', 'fr': 'fr-FR-denise' }; // Simplified voice IDs
        const payload = {
-         text: text.slice(0, 1000),
-         voiceId: voiceMap[language] || 'en-US-1-natalie',
-         format: 'MP3', // Uppercase as per Murf AI docs
-         sampleRate: 24000,
-         bitrate: '128' // String format as per some API requirements
+         text: text.slice(0, 1000), // Limit to 1000 chars
+         voiceId: voiceMap[language] || 'en-US-natalie'
        };
 
        try {
@@ -92,7 +88,12 @@ const Home = () => {
          });
 
          if (!response.ok) {
-           const errorData = await response.json();
+           let errorData;
+           try {
+             errorData = await response.json();
+           } catch {
+             errorData = await response.text();
+           }
            console.error('Murf AI response:', errorData);
            throw new Error(`Murf AI request failed: ${response.status} - ${JSON.stringify(errorData)}`);
          }
@@ -156,6 +157,7 @@ const Home = () => {
          setAudioError('Error setting up audio playback. Displaying text response.');
        }
      };
+
 
   const handleToggleListening = () => {
     console.log('Toggling listening:', isListening ? 'Stopping' : 'Starting');
