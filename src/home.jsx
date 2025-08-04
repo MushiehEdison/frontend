@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, createContext } from 'react';
+import React, { useState, useEffect, useRef, createContext, useCallback } from 'react';
 import { Mic, Send, User, Heart, Menu, X, Edit3, Moon, Sun, Phone, Calendar, Activity, WifiOff } from 'lucide-react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import SpeechRecognition, { useSpeechRecognition } from 'react-speech-recognition';
@@ -25,13 +25,63 @@ const Home = () => {
   const [networkStatus, setNetworkStatus] = useState(navigator.onLine ? 'online' : 'offline');
   const [isMicInput, setIsMicInput] = useState(false);
   const [audioError, setAudioError] = useState(null);
+  const [micPermission, setMicPermission] = useState('unknown');
   const messagesEndRef = useRef(null);
   const silenceTimerRef = useRef(null);
   const messageIdCounter = useRef(1);
   const wasListeningRef = useRef(false);
-  const speechRecognitionRef = useRef(null);
+  const isProcessingAudioRef = useRef(false);
+  const lastTranscriptRef = useRef('');
+  const speechTimeoutRef = useRef(null);
 
   const { transcript, interimTranscript, finalTranscript, resetTranscript, listening } = useSpeechRecognition();
+
+  // Check microphone permission
+  const checkMicrophonePermission = useCallback(async () => {
+    try {
+      if (navigator.permissions) {
+        const result = await navigator.permissions.query({ name: 'microphone' });
+        setMicPermission(result.state);
+        
+        result.addEventListener('change', () => {
+          setMicPermission(result.state);
+          if (result.state === 'denied' && isListening) {
+            handleStopListening();
+            setAudioError('Microphone permission denied. Please enable in browser settings.');
+          }
+        });
+        
+        return result.state !== 'denied';
+      } else {
+        // Fallback for browsers without permissions API
+        try {
+          await navigator.mediaDevices.getUserMedia({ audio: true });
+          setMicPermission('granted');
+          return true;
+        } catch (error) {
+          setMicPermission('denied');
+          return false;
+        }
+      }
+    } catch (error) {
+      console.warn('Could not check microphone permission:', error);
+      setMicPermission('unknown');
+      return true; // Assume granted if can't check
+    }
+  }, [isListening]);
+
+  // Debounced function to prevent rapid state changes
+  const debounce = (func, wait) => {
+    let timeout;
+    return function executedFunction(...args) {
+      const later = () => {
+        clearTimeout(timeout);
+        func(...args);
+      };
+      clearTimeout(timeout);
+      timeout = setTimeout(later, wait);
+    };
+  };
 
   const generateUniqueId = () => {
     return `msg-${messageIdCounter.current++}`;
@@ -56,108 +106,191 @@ const Home = () => {
     return cleanText;
   };
 
+  const clearAllTimers = () => {
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = null;
+    }
+    if (speechTimeoutRef.current) {
+      clearTimeout(speechTimeoutRef.current);
+      speechTimeoutRef.current = null;
+    }
+  };
+
+  const handleStopListening = useCallback(() => {
+    console.log('Stopping listening');
+    setIsListening(false);
+    setIsMicInput(false);
+    setStatus('');
+    setShowStatus(false);
+    clearAllTimers();
+    
+    try {
+      SpeechRecognition.stopListening();
+      SpeechRecognition.abortListening();
+    } catch (error) {
+      console.error('Error stopping SpeechRecognition:', error);
+    }
+    
+    resetTranscript();
+    lastTranscriptRef.current = '';
+    console.log('Voice input fully stopped');
+  }, [resetTranscript]);
+
+  const handleStartListening = useCallback(async () => {
+    console.log('Starting listening');
+    
+    // Check network status
+    if (networkStatus === 'offline') {
+      setAudioError('No internet connection. Voice input requires an active connection.');
+      return;
+    }
+
+    // Check browser support
+    if (!SpeechRecognition.browserSupportsSpeechRecognition()) {
+      setAudioError('Your browser does not support speech recognition.');
+      return;
+    }
+
+    // Check microphone permission
+    const hasPermission = await checkMicrophonePermission();
+    if (!hasPermission) {
+      setAudioError('Microphone permission is required for voice input.');
+      return;
+    }
+
+    // Clear any existing errors and timers
+    setAudioError(null);
+    clearAllTimers();
+    
+    // Reset state
+    resetTranscript();
+    lastTranscriptRef.current = '';
+    
+    // Start listening
+    setIsListening(true);
+    setIsMicInput(true);
+    setStatus('listening...');
+    setShowStatus(true);
+    
+    try {
+      SpeechRecognition.startListening({ 
+        continuous: true, 
+        interimResults: true, 
+        language: user?.language || 'en-US' 
+      });
+      console.log('Voice input started successfully');
+    } catch (error) {
+      console.error('Error starting SpeechRecognition:', error);
+      setAudioError('Failed to start voice input. Please try again.');
+      handleStopListening();
+    }
+  }, [networkStatus, user?.language, checkMicrophonePermission, resetTranscript, handleStopListening]);
+
   const playAudio = (base64Audio) => {
     if (!base64Audio) {
       console.warn('No audio data to play');
       setAudioError('No audio data received. Displaying text response.');
       return;
     }
+    
     try {
+      isProcessingAudioRef.current = true;
       const audio = new Audio(`data:audio/mp3;base64,${base64Audio}`);
+      
       audio.onplay = () => {
         console.log('Audio playback started, isListening:', isListening);
         setAudioError(null);
         if (isListening) {
           wasListeningRef.current = true;
-          setIsListening(false);
-          SpeechRecognition.stopListening();
-          SpeechRecognition.abortListening();
-          console.log('Mic stopped during audio playback');
+          handleStopListening();
+          console.log('Voice input paused during audio playback');
         } else {
           wasListeningRef.current = false;
         }
       };
+      
       audio.onended = () => {
         console.log('Audio playback ended, wasListening:', wasListeningRef.current);
+        isProcessingAudioRef.current = false;
+        
+        // Resume listening if it was active before and network is online
         if (wasListeningRef.current && networkStatus === 'online') {
-          setIsListening(true);
-          SpeechRecognition.startListening({ continuous: true, interimResults: true, language: user?.language || 'en-US' });
-          console.log('Mic restarted after audio playback');
+          setTimeout(() => {
+            handleStartListening();
+            console.log('Voice input resumed after audio playback');
+          }, 500); // Small delay to ensure clean transition
         }
       };
+      
       audio.onerror = (error) => {
         console.error('Audio playback error:', error);
+        isProcessingAudioRef.current = false;
         setAudioError('Failed to play audio response. Displaying text response.');
       };
+      
       audio.play().catch(error => {
         console.error('Error playing audio:', error);
+        isProcessingAudioRef.current = false;
         setAudioError('Failed to play audio response. Displaying text response.');
       });
     } catch (error) {
       console.error('Error setting up audio:', error);
+      isProcessingAudioRef.current = false;
       setAudioError('Error setting up audio playback. Displaying text response.');
     }
   };
 
-  const handleToggleListening = () => {
+  const handleToggleListening = useCallback(() => {
     console.log('Toggling listening:', isListening ? 'Stopping' : 'Starting');
-    if (networkStatus === 'offline') {
-      console.log('Cannot toggle listening: Offline');
-      setAudioError('No internet connection. Voice input requires an active connection.');
-      return;
-    }
-
-    if (!SpeechRecognition.browserSupportsSpeechRecognition()) {
-      console.log('Browser does not support speech recognition');
-      setAudioError('Your browser does not support speech recognition.');
-      return;
-    }
-
+    
     if (isListening) {
-      setIsListening(false);
-      setIsMicInput(false);
-      setStatus('');
-      setShowStatus(false);
-      resetTranscript();
-      
-      try {
-        SpeechRecognition.stopListening();
-        SpeechRecognition.abortListening();
-        if (speechRecognitionRef.current) {
-          speechRecognitionRef.current.onresult = null;
-          speechRecognitionRef.current.onerror = null;
-          speechRecognitionRef.current.onend = null;
-          speechRecognitionRef.current = null;
-          console.log('SpeechRecognition instance cleared');
-        }
-      } catch (error) {
-        console.error('Error stopping SpeechRecognition:', error);
-      }
-
-      if (silenceTimerRef.current) {
-        clearTimeout(silenceTimerRef.current);
-        silenceTimerRef.current = null;
-        console.log('Silence timer cleared');
-      }
-
-      console.log('Mic fully stopped and reset');
+      handleStopListening();
     } else {
-      setIsListening(true);
-      setIsMicInput(true);
-      setAudioError(null);
-      setStatus('listening...');
-      setShowStatus(true);
-      resetTranscript();
-      
-      speechRecognitionRef.current = SpeechRecognition.getRecognition();
-      SpeechRecognition.startListening({ 
-        continuous: true, 
-        interimResults: true, 
-        language: user?.language || 'en-US' 
-      });
-      console.log('Mic started with new SpeechRecognition instance');
+      handleStartListening();
     }
-  };
+  }, [isListening, handleStartListening, handleStopListening]);
+
+  // Debounced version to prevent rapid clicks
+  const debouncedToggleListening = useMemo(
+    () => debounce(handleToggleListening, 300),
+    [handleToggleListening]
+  );
+
+  // Handle transcript processing with improved timing
+  const processTranscript = useCallback((transcript) => {
+    if (!transcript.trim() || transcript === lastTranscriptRef.current) {
+      return;
+    }
+    
+    lastTranscriptRef.current = transcript;
+    clearAllTimers();
+    
+    // Set a timeout to process the transcript after a pause in speech
+    silenceTimerRef.current = setTimeout(() => {
+      if (transcript.trim() && isListening && !isProcessingAudioRef.current) {
+        console.log('Processing final transcript:', transcript);
+        setIsMicInput(true);
+        handleSendMessage(transcript.trim());
+        resetTranscript();
+        lastTranscriptRef.current = '';
+        
+        // Restart listening after sending message
+        if (networkStatus === 'online') {
+          speechTimeoutRef.current = setTimeout(() => {
+            if (!isProcessingAudioRef.current) {
+              handleStartListening();
+            }
+          }, 1000);
+        }
+      }
+    }, 2500); // Slightly reduced timeout for better responsiveness
+  }, [isListening, networkStatus, resetTranscript]);
+
+  // Initialize microphone permission check
+  useEffect(() => {
+    checkMicrophonePermission();
+  }, [checkMicrophonePermission]);
 
   useEffect(() => {
     console.log('Saving messages to localStorage:', messages);
@@ -222,78 +355,46 @@ const Home = () => {
     scrollToBottom();
   }, [messages]);
 
+  // Handle final transcript with improved processing
   useEffect(() => {
-    if (finalTranscript.trim()) {
-      console.log('Final transcript received:', finalTranscript, 'isMicInput:', isMicInput);
-      if (silenceTimerRef.current) {
-        clearTimeout(silenceTimerRef.current);
-      }
-      silenceTimerRef.current = setTimeout(() => {
-        setIsMicInput(true); // Ensure isMicInput is true for voice inputs
-        handleSendMessage(finalTranscript.trim());
-        resetTranscript();
-        if (isListening && networkStatus === 'online') {
-          SpeechRecognition.startListening({ continuous: true, interimResults: true, language: user?.language || 'en-US' });
-        }
-      }, 3000);
+    if (finalTranscript.trim() && isListening && !isProcessingAudioRef.current) {
+      console.log('Final transcript received:', finalTranscript);
+      processTranscript(finalTranscript);
     }
-  }, [finalTranscript, isListening, networkStatus]);
+  }, [finalTranscript, isListening, processTranscript]);
 
+  // Handle network status changes with improved cleanup
   useEffect(() => {
     const handleNetworkChange = () => {
-      setNetworkStatus(navigator.onLine ? 'online' : 'offline');
-      if (!navigator.onLine && isListening) {
-        setIsListening(false);
-        setIsMicInput(false);
-        setStatus('');
-        setShowStatus(false);
-        resetTranscript();
-        try {
-          SpeechRecognition.stopListening();
-          SpeechRecognition.abortListening();
-          if (speechRecognitionRef.current) {
-            speechRecognitionRef.current.onresult = null;
-            speechRecognitionRef.current.onerror = null;
-            speechRecognitionRef.current.onend = null;
-            speechRecognitionRef.current = null;
-          }
-        } catch (error) {
-          console.error('Error stopping SpeechRecognition on offline:', error);
-        }
-        if (silenceTimerRef.current) {
-          clearTimeout(silenceTimerRef.current);
-          silenceTimerRef.current = null;
-        }
+      const newStatus = navigator.onLine ? 'online' : 'offline';
+      console.log('Network status changed:', newStatus);
+      setNetworkStatus(newStatus);
+      
+      if (newStatus === 'offline' && isListening) {
+        handleStopListening();
         setAudioError('No internet connection. Voice input requires an active connection.');
-        console.log('Mic stopped due to offline status');
       }
     };
 
     window.addEventListener('online', handleNetworkChange);
     window.addEventListener('offline', handleNetworkChange);
 
+    // Cleanup function
     return () => {
       window.removeEventListener('online', handleNetworkChange);
       window.removeEventListener('offline', handleNetworkChange);
-      if (silenceTimerRef.current) {
-        clearTimeout(silenceTimerRef.current);
-      }
+      clearAllTimers();
+      
       if (isListening) {
         try {
           SpeechRecognition.stopListening();
           SpeechRecognition.abortListening();
-          if (speechRecognitionRef.current) {
-            speechRecognitionRef.current.onresult = null;
-            speechRecognitionRef.current.onerror = null;
-            speechRecognitionRef.current.onend = null;
-            speechRecognitionRef.current = null;
-          }
         } catch (error) {
           console.error('Error stopping SpeechRecognition on unmount:', error);
         }
       }
     };
-  }, [isListening]);
+  }, [isListening, handleStopListening]);
 
   const handleSendMessage = async (text, retryCount = 0) => {
     console.log('handleSendMessage called with text:', text, 'isMicInput:', isMicInput, 'retryCount:', retryCount);
@@ -545,6 +646,12 @@ const Home = () => {
                   <p className="text-sm font-medium">No internet connection. Voice input requires an active connection.</p>
                 </div>
               )}
+              {micPermission === 'denied' && (
+                <div className="flex items-center text-red-500 mb-2">
+                  <Mic className="w-5 h-5 mr-2" />
+                  <p className="text-sm font-medium">Microphone permission denied. Please enable in browser settings.</p>
+                </div>
+              )}
               <div className="ripple-container">
                 <div className="ripple"></div>
                 <div className="ripple"></div>
@@ -555,7 +662,7 @@ const Home = () => {
                 {transcript || (status === 'listening' ? 'Listening...' : 'Processing...')}
               </p>
               <button
-                onClick={handleToggleListening}
+                onClick={debouncedToggleListening}
                 className={`mt-4 p-2 rounded-full border-2 border-red-500 ${isDarkMode ? 'text-red-400 hover:text-white active:text-white' : 'text-red-500 hover:text-white active:text-white'} hover:bg-red-500 active:bg-red-500 transition-colors`}
                 aria-label="Stop listening"
               >
@@ -568,7 +675,7 @@ const Home = () => {
             <InputArea
               onSendMessage={handleSendMessage}
               isListening={isListening}
-              onToggleListening={handleToggleListening}
+              onToggleListening={debouncedToggleListening}
               isDarkMode={isDarkMode}
               transcript={transcript}
               interimTranscript={interimTranscript}
