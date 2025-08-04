@@ -214,12 +214,15 @@ const Home = () => {
         console.log('Audio playback ended, wasListening:', wasListeningRef.current);
         isProcessingAudioRef.current = false;
         
-        // Resume listening if it was active before and network is online
+        // Only resume listening if explicitly requested and after a longer delay
         if (wasListeningRef.current && networkStatus === 'online') {
           setTimeout(() => {
-            handleStartListening();
-            console.log('Voice input resumed after audio playback');
-          }, 500); // Small delay to ensure clean transition
+            // Double-check conditions before restarting
+            if (!isListening && !isProcessingAudioRef.current && networkStatus === 'online') {
+              handleStartListening();
+              console.log('Voice input resumed after audio playback');
+            }
+          }, 1500); // Longer delay to prevent immediate re-triggering
         }
       };
       
@@ -257,10 +260,15 @@ const Home = () => {
     [handleToggleListening]
   );
 
-  // Handle transcript processing with improved timing
+  // Handle transcript processing with improved timing and duplicate prevention
   const processTranscript = useCallback((transcript) => {
-    if (!transcript.trim() || transcript === lastTranscriptRef.current) {
+    if (!transcript.trim() || transcript === lastTranscriptRef.current || isProcessingAudioRef.current) {
       return;
+    }
+    
+    // Additional check to prevent processing the same transcript multiple times
+    if (silenceTimerRef.current) {
+      return; // Already processing a transcript
     }
     
     lastTranscriptRef.current = transcript;
@@ -270,22 +278,17 @@ const Home = () => {
     silenceTimerRef.current = setTimeout(() => {
       if (transcript.trim() && isListening && !isProcessingAudioRef.current) {
         console.log('Processing final transcript:', transcript);
+        
+        // Stop listening immediately to prevent multiple sends
+        handleStopListening();
+        
         setIsMicInput(true);
         handleSendMessage(transcript.trim());
         resetTranscript();
         lastTranscriptRef.current = '';
-        
-        // Restart listening after sending message
-        if (networkStatus === 'online') {
-          speechTimeoutRef.current = setTimeout(() => {
-            if (!isProcessingAudioRef.current) {
-              handleStartListening();
-            }
-          }, 1000);
-        }
       }
-    }, 2500); // Slightly reduced timeout for better responsiveness
-  }, [isListening, networkStatus, resetTranscript]);
+    }, 2500);
+  }, [isListening, resetTranscript, handleStopListening]);
 
   // Initialize microphone permission check
   useEffect(() => {
@@ -398,9 +401,20 @@ const Home = () => {
 
   const handleSendMessage = async (text, retryCount = 0) => {
     console.log('handleSendMessage called with text:', text, 'isMicInput:', isMicInput, 'retryCount:', retryCount);
+    
+    // Prevent duplicate sends by checking if already processing
+    if (isProcessingAudioRef.current) {
+      console.log('Already processing a message, skipping duplicate send');
+      return;
+    }
+    
+    // Set processing flag immediately
+    isProcessingAudioRef.current = true;
+    
     const token = localStorage.getItem('token');
     if (!token) {
       console.error('No token found in localStorage');
+      isProcessingAudioRef.current = false; // Reset flag
       setMessages((prev) => [
         ...prev,
         {
@@ -421,6 +435,7 @@ const Home = () => {
       const exp = decoded.exp * 1000;
       if (Date.now() >= exp) {
         console.error('Token is expired');
+        isProcessingAudioRef.current = false; // Reset flag
         setMessages((prev) => [
           ...prev,
           {
@@ -436,6 +451,7 @@ const Home = () => {
       }
     } catch (error) {
       console.error('Invalid token format:', error);
+      isProcessingAudioRef.current = false; // Reset flag
       setMessages((prev) => [
         ...prev,
         {
@@ -538,6 +554,10 @@ const Home = () => {
           setAudioError(data.audio_error || 'Voice response unavailable. Displaying text response.');
         }
       }
+      
+      // Reset processing flag after successful completion
+      isProcessingAudioRef.current = false;
+      
     } catch (error) {
       console.error('Error during POST request:', error);
       if (retryCount < maxRetries) {
@@ -547,6 +567,7 @@ const Home = () => {
       }
       console.error('Max retries reached, giving up');
       setShowStatus(false);
+      isProcessingAudioRef.current = false; // Reset flag
       const errorResponse = {
         id: generateUniqueId(),
         text: `Failed to connect to server: ${error.message}. Your message was sent but not saved. Please try again.`,
