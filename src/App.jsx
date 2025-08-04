@@ -6,6 +6,7 @@ import AllVisits from './components/visits';
 import Home from './home';
 import SignUp from './components/SignUp';
 import SignIn from './components/SignIn';
+import Intro from './components/intro';
 
 const AuthContext = createContext();
 
@@ -33,8 +34,8 @@ const AuthProvider = ({ children }) => {
         .then((data) => {
           console.log('Verify response data:', data);
           if (data.user) {
-            setUser(data.user); // Set user data
-            setToken(token); // Ensure token is set
+            setUser(data.user);
+            setToken(token);
           } else {
             console.error('No user data in verify response:', data);
             localStorage.removeItem('token');
@@ -54,7 +55,7 @@ const AuthProvider = ({ children }) => {
       setLoading(false);
       console.log('No token found, auth loading complete');
     }
-  }, [token]); // Dependency on token only
+  }, [token]);
 
   const login = (newToken, userData) => {
     console.log('Logging in with token:', newToken, 'user:', userData);
@@ -92,8 +93,8 @@ const ProtectedRoute = ({ children }) => {
   }
 
   if (!user) {
-    console.log('ProtectedRoute: No user, redirecting to /signin');
-    return <Navigate to="/signin" replace />;
+    console.log('ProtectedRoute: No user, redirecting to /intro');
+    return <Navigate to="/intro" replace />;
   }
 
   return children;
@@ -103,8 +104,9 @@ const App = () => {
   return (
     <AuthProvider>
       <Router>
-        <main className="pt-16 pb-20">
+        <main className="min-h-screen">
           <Routes>
+            <Route path="/intro" element={<Intro />} />
             <Route path="/signin" element={<SignIn />} />
             <Route path="/signup" element={<SignUp />} />
             <Route
@@ -177,6 +179,13 @@ const styles = `
   @keyframes spin {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
+  }
+  .animate-fade-in {
+    animation: fadeIn 1s ease-in-out;
+  }
+  @keyframes fadeIn {
+    0% { opacity: 0; transform: translateY(20px); }
+    100% { opacity: 1; transform: translateY(0); }
   }
 `;
 
