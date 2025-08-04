@@ -7,7 +7,7 @@ import Home from './home';
 import SignUp from './components/SignUp';
 import SignIn from './components/SignIn';
 import Intro from './components/intro';
-
+import AdminDashboard from './Admin';
 const AuthContext = createContext();
 
 export const useAuth = () => useContext(AuthContext);
@@ -162,6 +162,14 @@ const App = () => {
               element={
                 <ProtectedRoute>
                   <History />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/history"
+              element={
+                <ProtectedRoute>
+                  <AdminDashboard />
                 </ProtectedRoute>
               }
             />
