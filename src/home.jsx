@@ -30,11 +30,9 @@ const Home = () => {
   const wasListeningRef = useRef(false);
   const speechRecognitionRef = useRef(null);
   const lastTranscriptRef = useRef('');
-  const isProcessingRef = useRef(false); // Lock for message processing
+  const isProcessingRef = useRef(false);
 
   const { transcript, interimTranscript, finalTranscript, resetTranscript, listening } = useSpeechRecognition();
-
-  const MURF_API_KEY = process.env.REACT_APP_MURF_API_KEY;
 
   const generateUniqueId = () => {
     return `msg-${messageIdCounter.current++}`;
@@ -60,63 +58,37 @@ const Home = () => {
   };
 
   const generateTtsAudio = async (text, language = 'en') => {
-    if (!MURF_API_KEY) {
-      console.error('Murf AI API key not set');
-      return null, 'TTS service unavailable: API key not configured';
-    }
-
     if (!text || text.trim() === '') {
       console.error('Invalid or empty text for TTS:', text);
       return null, 'Invalid or empty text for audio generation';
     }
 
-    const voiceMap = {
-      'en': 'en-US-natalie', // African English voice
-      'fr': 'fr-FR-denise'   // African French voice
-    };
-    const voiceId = voiceMap[language] || voiceMap['en'];
-
-    const payload = {
-      text: text.trim().slice(0, 1000), // Limit to 1000 chars
-      voiceId,
-      format: 'MP3',
-      sample_rate: 24000,
-      pitch: 'low',
-      speed: 0.9,
-      prosody: 'expressive'
-    };
-
     try {
-      console.log('Sending TTS request to Murf AI:', payload);
-      const response = await fetch('https://api.murf.ai/v1/speech/generate', {
+      console.log('Sending TTS request to backend proxy:', { text, language });
+      const response = await fetch('https://backend-b5jw.onrender.com/api/auth/tts', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${MURF_API_KEY}`,
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
         },
-        body: JSON.stringify(payload)
+        credentials: 'include',
+        body: JSON.stringify({ text, language })
       });
 
       if (!response.ok) {
-        throw new Error(`TTS request failed: ${response.status} ${response.statusText}`);
+        const errorText = await response.text();
+        throw new Error(`TTS proxy request failed: ${response.status} ${response.statusText} - ${errorText}`);
       }
 
-      const audioContent = await response.blob();
-      if (!audioContent || audioContent.size < 100) {
-        console.error('Invalid or empty audio content:', audioContent?.size);
-        return null, 'No audio received from TTS service';
+      const data = await response.json();
+      if (data.audio) {
+        console.log('Generated base64 audio from proxy, length:', data.audio.length);
+        return data.audio, null;
+      } else {
+        throw new Error(data.error || 'No audio received from TTS proxy');
       }
-
-      const audioBase64 = await new Promise((resolve) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result.split(',')[1]);
-        reader.readAsDataURL(audioContent);
-      });
-
-      console.log('Generated base64 audio, length:', audioBase64.length);
-      return audioBase64, null;
     } catch (error) {
-      console.error('TTS generation error:', error);
+      console.error('TTS proxy error:', error);
       return null, `TTS generation failed: ${error.message}`;
     }
   };
@@ -128,7 +100,7 @@ const Home = () => {
       return;
     }
     try {
-      const audio = new Audio(`data:audio/mp3;base64,${base64Audio}`);
+      const audio = new Audio(`data:audio/mpeg;base64,${base64Audio}`);
       audio.onplay = () => {
         console.log('Audio playback started, isListening:', isListening);
         setAudioError(null);
@@ -452,7 +424,7 @@ const Home = () => {
           'Authorization': `Bearer ${token}`,
         },
         credentials: 'include',
-        body: JSON.stringify({ message: text }),
+        body: JSON.stringify({ message: text, isMicInput: isMicInput }),
       });
 
       console.log('POST response status:', response.status);

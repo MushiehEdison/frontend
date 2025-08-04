@@ -1,15 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  User, 
-  X, 
-  Edit3, 
-  Save, 
-  Phone, 
-  MapPin, 
-  Heart, 
-  Calendar,
-  AlertCircle,
-  CheckCircle
+  User, X, Edit3, Save, Phone, MapPin, Heart, Calendar,
+  AlertCircle, CheckCircle 
 } from 'lucide-react';
 
 const EditProfile = () => {
@@ -18,7 +10,6 @@ const EditProfile = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  // Default profile data aligned with MedicalProfile model
   const defaultProfile = {
     firstName: '',
     lastName: '',
@@ -59,7 +50,6 @@ const EditProfile = () => {
   const [profile, setProfile] = useState(defaultProfile);
   const [editedProfile, setEditedProfile] = useState({ ...defaultProfile });
 
-  // Fetch profile data on component mount
   useEffect(() => {
     const fetchProfile = async () => {
       try {
@@ -72,7 +62,6 @@ const EditProfile = () => {
         });
         const data = await response.json();
         if (response.ok) {
-          // Merge fetched data with default profile
           const mergedProfile = {
             ...defaultProfile,
             ...data,
@@ -130,50 +119,45 @@ const EditProfile = () => {
     }));
   };
 
-// In profile.js - Update the handleSave function:
+  const handleSave = async () => {
+    try {
+      const payload = {
+        ...editedProfile,
+        dateOfBirth: editedProfile.dateOfBirth || null,
+        lastDentalVisit: editedProfile.lastDentalVisit || null,
+        lastEyeExam: editedProfile.lastEyeExam || null,
+        lifestyle: {
+          smokes: editedProfile.lifestyle?.smokes || false,
+          alcohol: editedProfile.lifestyle?.alcohol || 'Never',
+          exercise: editedProfile.lifestyle?.exercise || 'Never',
+          diet: editedProfile.lifestyle?.diet || 'Balanced'
+        }
+      };
 
-const handleSave = async () => {
-  try {
-    // Prepare payload with null-safe dates
-    const payload = {
-      ...editedProfile,
-      dateOfBirth: editedProfile.dateOfBirth || null,
-      lastDentalVisit: editedProfile.lastDentalVisit || null,
-      lastEyeExam: editedProfile.lastEyeExam || null,
-      lifestyle: {
-        smokes: editedProfile.lifestyle?.smokes || false,
-        alcohol: editedProfile.lifestyle?.alcohol || 'Never',
-        exercise: editedProfile.lifestyle?.exercise || 'Never',
-        diet: editedProfile.lifestyle?.diet || 'Balanced'
+      Object.keys(payload).forEach(key => {
+        if (payload[key] === '') payload[key] = null;
+      });
+
+      const response = await fetch('https://backend-b5jw.onrender.com/api/auth/profile', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Update failed');
       }
-    };
 
-    // Remove empty strings from payload
-    Object.keys(payload).forEach(key => {
-      if (payload[key] === '') payload[key] = null;
-    });
-
-    const response = await fetch('https://backend-b5jw.onrender.com/api/auth/profile', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token')}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(payload)
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.message || 'Update failed');
+      setIsEditing(false);
+      setSuccess('Profile updated!');
+    } catch (err) {
+      setError(err.message);
     }
-
-    // Success handling
-    setIsEditing(false);
-    setSuccess('Profile updated!');
-  } catch (err) {
-    setError(err.message);
-  }
-};
+  };
 
   const handleCancel = () => {
     setEditedProfile({ ...profile });
@@ -223,7 +207,7 @@ const handleSave = async () => {
                 }}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
               >
-                <option value="">Select {label}</option>
+                <option value="">{displayValue || placeholder || `Select ${label}`}</option>
                 {options.map(option => (
                   <option key={option.value} value={option.value}>
                     {option.label}
@@ -235,7 +219,7 @@ const handleSave = async () => {
                 value={value || ''}
                 onChange={(e) => handleInputChange(field, e.target.value)}
                 rows="3"
-                placeholder={placeholder}
+                placeholder={displayValue || placeholder}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors resize-none"
               />
             ) : (
@@ -251,7 +235,7 @@ const handleSave = async () => {
                     handleInputChange(field, e.target.value);
                   }
                 }}
-                placeholder={placeholder}
+                placeholder={displayValue || placeholder}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
               />
             )}
@@ -261,7 +245,7 @@ const handleSave = async () => {
             <span className="text-gray-900">
               {type === 'checkbox' 
                 ? (displayValue ? 'Yes' : 'No')
-                : displayValue || 'Not specified'
+                : displayValue || placeholder || 'Not specified'
               }
             </span>
           </div>
@@ -273,20 +257,20 @@ const handleSave = async () => {
   const renderPersonalSection = () => (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {renderField('First Name', 'firstName', 'text', null, 'Enter your first name')}
-        {renderField('Last Name', 'lastName', 'text', null, 'Enter your last name')}
+        {renderField('First Name', 'firstName', 'text', null, 'Enter first name')}
+        {renderField('Last Name', 'lastName', 'text', null, 'Enter last name')}
         {renderField('Date of Birth', 'dateOfBirth', 'date')}
         {renderField('Gender', 'gender', 'select', [
           { value: 'Male', label: 'Male' },
           { value: 'Female', label: 'Female' },
           { value: 'Other', label: 'Other' }
-        ])}
+        ], 'Select gender')}
         {renderField('Marital Status', 'maritalStatus', 'select', [
           { value: 'Single', label: 'Single' },
           { value: 'Married', label: 'Married' },
           { value: 'Divorced', label: 'Divorced' },
           { value: 'Widowed', label: 'Widowed' }
-        ])}
+        ], 'Select status')}
         {renderField('Nationality', 'nationality', 'text', null, 'e.g., Cameroonian')}
         {renderField('Profession', 'profession', 'text', null, 'Your occupation')}
       </div>
@@ -329,14 +313,14 @@ const handleSave = async () => {
           { value: 'AB-', label: 'AB-' },
           { value: 'O+', label: 'O+' },
           { value: 'O-', label: 'O-' }
-        ])}
+        ], 'Select blood type')}
         {renderField('Genotype', 'genotype', 'select', [
           { value: 'AA', label: 'AA' },
           { value: 'AS', label: 'AS' },
           { value: 'SS', label: 'SS' },
           { value: 'AC', label: 'AC' },
           { value: 'SC', label: 'SC' }
-        ])}
+        ], 'Select genotype')}
         {renderField('Primary Hospital', 'primaryHospital', 'text', null, 'Your preferred hospital')}
         {renderField('Primary Physician', 'primaryPhysician', 'text', null, 'Your main doctor')}
         {renderField('Last Dental Visit', 'lastDentalVisit', 'date')}
@@ -344,34 +328,34 @@ const handleSave = async () => {
       </div>
       
       <div className="grid grid-cols-1 gap-6">
-        {renderField('Known Allergies', 'allergies', 'textarea', null, 'List any allergies you have')}
-        {renderField('Chronic Conditions', 'chronicConditions', 'textarea', null, 'Ongoing medical conditions')}
-        {renderField('Current Medications', 'medications', 'textarea', null, 'List current medications and dosages')}
-        {renderField('Medical History', 'medicalHistory', 'textarea', null, 'Previous diagnoses and treatments')}
+        {renderField('Known Allergies', 'allergies', 'textarea', null, 'List any allergies')}
+        {renderField('Chronic Conditions', 'chronicConditions', 'textarea', null, 'Ongoing conditions')}
+        {renderField('Current Medications', 'medications', 'textarea', null, 'Medications/dosages')}
+        {renderField('Medical History', 'medicalHistory', 'textarea', null, 'Past diagnoses')}
         {renderField('Vaccination History', 'vaccinationHistory', 'textarea', null, 'Vaccines received')}
-        {renderField('Family Medical History', 'familyHistory', 'textarea', null, 'Relevant family medical conditions')}
+        {renderField('Family Medical History', 'familyHistory', 'textarea', null, 'Family conditions')}
       </div>
 
       <div className="border-t pt-6">
-        <h4 className="text-lg font-medium text-gray-900 mb-4">Lifestyle Information</h4>
+        <h4 className="text-lg font-medium text-gray-900 mb-4">Lifestyle</h4>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {renderField('Smoking Status', 'lifestyle.smokes', 'select', [
+          {renderField('Smokes', 'lifestyle.smokes', 'select', [
             { value: false, label: 'No' },
             { value: true, label: 'Yes' }
           ])}
-          {renderField('Alcohol Consumption', 'lifestyle.alcohol', 'select', [
+          {renderField('Alcohol', 'lifestyle.alcohol', 'select', [
             { value: 'Never', label: 'Never' },
             { value: 'Occasionally', label: 'Occasionally' },
             { value: 'Regularly', label: 'Regularly' }
           ])}
-          {renderField('Exercise Frequency', 'lifestyle.exercise', 'select', [
+          {renderField('Exercise', 'lifestyle.exercise', 'select', [
             { value: 'Never', label: 'Never' },
             { value: 'Rarely', label: 'Rarely' },
             { value: '1-2 times weekly', label: '1-2 times weekly' },
             { value: '3 times weekly', label: '3 times weekly' },
             { value: '4+ times weekly', label: '4+ times weekly' }
           ])}
-          {renderField('Diet Type', 'lifestyle.diet', 'select', [
+          {renderField('Diet', 'lifestyle.diet', 'select', [
             { value: 'Balanced', label: 'Balanced' },
             { value: 'Vegetarian', label: 'Vegetarian' },
             { value: 'Vegan', label: 'Vegan' },
@@ -396,7 +380,6 @@ const handleSave = async () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Feedback Messages */}
         {error && (
           <div className="mb-4 p-4 bg-red-100 border border-red-200 text-red-700 rounded-lg flex items-center gap-2">
             <AlertCircle className="w-5 h-5" />
@@ -410,7 +393,6 @@ const handleSave = async () => {
           </div>
         )}
 
-        {/* Header */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-8">
           <div className="px-6 py-4 border-b border-gray-200">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -459,7 +441,6 @@ const handleSave = async () => {
         </div>
 
         <div className="flex flex-col lg:flex-row gap-8">
-          {/* Navigation Sidebar */}
           <div className="lg:w-1/4">
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
               <nav className="space-y-2">
@@ -484,7 +465,6 @@ const handleSave = async () => {
             </div>
           </div>
 
-          {/* Main Content */}
           <div className="lg:w-3/4">
             <div className="bg-white rounded-lg shadow-sm border border-gray-200">
               <div className="px-6 py-4 border-b border-gray-200">
