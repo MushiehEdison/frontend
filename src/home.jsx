@@ -214,15 +214,15 @@ const Home = () => {
         console.log('Audio playback ended, wasListening:', wasListeningRef.current);
         isProcessingAudioRef.current = false;
         
-        // Only resume listening if explicitly requested and after a longer delay
+        // Automatically resume listening after AI response for continuous conversation
         if (wasListeningRef.current && networkStatus === 'online') {
           setTimeout(() => {
             // Double-check conditions before restarting
             if (!isListening && !isProcessingAudioRef.current && networkStatus === 'online') {
               handleStartListening();
-              console.log('Voice input resumed after audio playback');
+              console.log('Voice input resumed after audio playback for continuous conversation');
             }
-          }, 1500); // Longer delay to prevent immediate re-triggering
+          }, 1000); // Shorter delay for better conversation flow
         }
       };
       
@@ -535,6 +535,16 @@ const Home = () => {
             if (aiResponse && aiResponse.text) {
               setMessages((prev) => [...prev.filter((m) => m.id !== newMessage.id), ...formattedMessages]);
             }
+            
+            // Resume listening even without audio for continuous conversation
+            if (wasListeningRef.current && networkStatus === 'online') {
+              setTimeout(() => {
+                if (!isListening && !isProcessingAudioRef.current && networkStatus === 'online') {
+                  handleStartListening();
+                  console.log('Voice input resumed after text-only response');
+                }
+              }, 1000);
+            }
           }
         }
         if (!isValidId && data.id) {
@@ -552,6 +562,16 @@ const Home = () => {
         setMessages((prev) => [...prev, errorResponse]);
         if (isMicInput) {
           setAudioError(data.audio_error || 'Voice response unavailable. Displaying text response.');
+          
+          // Resume listening after error response for continuous conversation
+          if (wasListeningRef.current && networkStatus === 'online') {
+            setTimeout(() => {
+              if (!isListening && !isProcessingAudioRef.current && networkStatus === 'online') {
+                handleStartListening();
+                console.log('Voice input resumed after error response');
+              }
+            }, 1000);
+          }
         }
       }
       
@@ -577,6 +597,16 @@ const Home = () => {
       setMessages((prev) => [...prev, errorResponse]);
       if (isMicInput) {
         setAudioError('Failed to connect to server for audio response. Displaying text response.');
+        
+        // Resume listening after network error for continuous conversation
+        if (wasListeningRef.current && networkStatus === 'online') {
+          setTimeout(() => {
+            if (!isListening && !isProcessingAudioRef.current && networkStatus === 'online') {
+              handleStartListening();
+              console.log('Voice input resumed after network error');
+            }
+          }, 2000); // Longer delay for network errors
+        }
       }
     }
   };
