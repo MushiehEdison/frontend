@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, createContext, useCallback } from 'react';
+import React, { useState, useEffect, useRef, createContext, useCallback, useMemo } from 'react';
 import { Mic, Send, User, Heart, Menu, X, Edit3, Moon, Sun, Phone, Calendar, Activity, WifiOff } from 'lucide-react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import SpeechRecognition, { useSpeechRecognition } from 'react-speech-recognition';
