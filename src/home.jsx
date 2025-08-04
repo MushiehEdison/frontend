@@ -60,68 +60,39 @@ export const ChatContext = createContext();
      
 const generateTtsAudio = async (text, language = 'en') => {
   if (!text || text.trim() === '') {
-    console.error('Invalid or empty text for TTS:', text);
     return [null, 'Invalid or empty text for audio generation'];
   }
 
-  if (!MURF_API_KEY || MURF_API_KEY === 'your_murf_api_key') {
-    console.error('Murf AI API key is missing or invalid');
-    return [null, 'Murf AI API key is missing or invalid'];
-  }
-
-  // Updated voice mapping - using just the voice names (not full IDs)
-  const voiceMap = { 
-    'en': 'natalie',  
-    'fr': 'denise'   
-  }; 
-
-  // Correct API payload structure based on official docs
   const payload = {
-    text: text.slice(0, 1000), // Limit to 1000 chars
-    voiceId: voiceMap[language] || 'natalie',
-    format: 'MP3',
-    modelVersion: 'GEN2',
-    responseFormat: 'base64',  // This tells API to return base64 instead of URL
-    sampleRate: 44100
+    text: text.slice(0, 1000),
+    voiceId: 'natalie',
+    format: 'MP3'
   };
 
   try {
-    console.log('Sending TTS request to Murf AI:', { 
-      url: 'https://api.murf.ai/v1/speech/synthesize',  // Correct endpoint
-      payload 
-    });
-
-    const response = await fetch('https://api.murf.ai/v1/speech/synthesize', {  // Fixed endpoint
+    // Using a CORS proxy - NOT SECURE FOR PRODUCTION!
+    const proxyUrl = 'https://cors-anywhere.herokuapp.com/';
+    const targetUrl = 'https://api.murf.ai/v1/speech/synthesize';
+    
+    const response = await fetch(proxyUrl + targetUrl, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${MURF_API_KEY}`,
         'Content-Type': 'application/json',
-        'Accept': 'application/json'  // Changed from audio/mpeg to application/json
+        'X-Requested-With': 'XMLHttpRequest'
       },
       body: JSON.stringify(payload)
     });
 
     if (!response.ok) {
-      let errorData;
-      try {
-        errorData = await response.json();
-      } catch {
-        errorData = await response.text();
-      }
-      console.error('Murf AI response:', errorData);
-      throw new Error(`Murf AI request failed: ${response.status} - ${JSON.stringify(errorData)}`);
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
 
     const data = await response.json();
-    console.log('Murf AI response:', data);
-
-    // The response should contain base64 audio data
-    if (data.audioBase64) {
-      console.log('Generated base64 audio, length:', data.audioBase64.length);
-      return [data.audioBase64, null];
-    } else if (data.audioUrl) {
-      // If for some reason we get a URL instead, fetch the audio
-      const audioResponse = await fetch(data.audioUrl);
+    
+    if (data.audioUrl) {
+      // Fetch the audio file
+      const audioResponse = await fetch(proxyUrl + data.audioUrl);
       const audioBlob = await audioResponse.blob();
       const arrayBuffer = await audioBlob.arrayBuffer();
       const audioBase64 = btoa(
@@ -131,13 +102,42 @@ const generateTtsAudio = async (text, language = 'en') => {
         )
       );
       return [audioBase64, null];
-    } else {
-      throw new Error('No audio data received from Murf AI');
     }
-
+    
+    return [null, 'No audio URL in response'];
   } catch (error) {
-    console.error('Murf AI TTS error:', error);
-    return [null, `TTS generation failed: ${error.message}`];
+    console.error('TTS error:', error);
+    return [null, error.message];
+  }
+};
+
+// Alternative: Use allorigins.win proxy
+const generateTtsAudioAlt = async (text, language = 'en') => {
+  try {
+    const payload = {
+      text: text.slice(0, 1000),
+      voiceId: 'natalie',
+      format: 'MP3'
+    };
+
+    // Using allorigins.win proxy
+    const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent('https://api.murf.ai/v1/speech/synthesize')}`;
+    
+    const response = await fetch(proxyUrl, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${MURF_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    });
+
+    // Handle response...
+    const data = await response.json();
+    // Process audio data...
+    
+  } catch (error) {
+    return [null, error.message];
   }
 };
      const playAudio = (base64Audio) => {
