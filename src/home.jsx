@@ -34,7 +34,7 @@ export const ChatContext = createContext();
 
      const { transcript, interimTranscript, finalTranscript, resetTranscript, listening } = useSpeechRecognition();
 
-     const MURF_API_KEY = 'ap2_1ed94e55-aa96-4c3e-bce3-495c9e3c8d4a'; 
+     const MURF_API_KEY = 'ap2_c01f9127-cb28-4632-a113-951cb0800e7c'; 
      const generateUniqueId = () => {
        return `msg-${messageIdCounter.current++}`;
      };
