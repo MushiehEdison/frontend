@@ -74,7 +74,7 @@ const Home = () => {
     });
   };
 
-  // Enhanced voice selection for female, human-like, comforting African voices
+  // Enhanced voice selection for female African voices
   const findCameroonFriendlyVoice = (voices, language) => {
     const isEnglish = !language.startsWith('fr');
     console.log('Available voices:', voices.map(v => ({ name: v.name, lang: v.lang })));
@@ -82,34 +82,27 @@ const Home = () => {
     const voicePreferences = isEnglish
       ? [
           // Female African English voices
-          voice => voice.lang === 'en-ZA' && /female|woman|zara|amara|akosua|kathy|princess|samantha|michelle/i.test(voice.name),
-          voice => voice.lang === 'en-NG' && /female|woman|adaora|kanyinsola/i.test(voice.name),
-          voice => voice.lang === 'en-KE' && /female|woman/i.test(voice.name),
-          voice => voice.lang === 'en-GH' && /female|woman/i.test(voice.name),
-          voice => voice.lang === 'en-CM' && /female|woman/i.test(voice.name),
-          // Warm, comforting English voices
-          voice => voice.lang.startsWith('en') && 
-                   /zara|amara|akosua|kathy|princess|samantha|michelle|warm|soft|gentle|calm/i.test(voice.name),
+          voice => voice.lang === 'en-ZA' && /zara|amara|kanyinsola|adaora|akosua|female|woman|lady/i.test(voice.name),
+          voice => voice.lang === 'en-NG' && /zara|amara|kanyinsola|adaora|akosua|female|woman|lady/i.test(voice.name),
+          voice => voice.lang === 'en-KE' && /zara|amara|kanyinsola|adaora|akosua|female|woman|lady/i.test(voice.name),
+          voice => voice.lang === 'en-GH' && /zara|amara|kanyinsola|adaora|akosua|female|woman|lady/i.test(voice.name),
+          voice => voice.lang === 'en-CM' && /zara|amara|kanyinsola|adaora|akosua|female|woman|lady/i.test(voice.name),
           // Fallback to any female English voice
-          voice => voice.lang.startsWith('en') && /female|woman/i.test(voice.name),
-          // Default English voice
+          voice => voice.lang.startsWith('en') && /female|woman|lady|kathy|princess|samantha|victoria|susan/i.test(voice.name),
+          // Any English voice
           voice => voice.lang.startsWith('en')
         ]
       : [
           // Female African French voices
-          voice => voice.lang === 'fr-CM' && /female|woman|aminata|fatou|mariama|aicha|khadija|binta|coumba|rama/i.test(voice.name),
-          voice => voice.lang === 'fr-SN' && /female|woman/i.test(voice.name),
-          voice => voice.lang === 'fr-CI' && /female|woman/i.test(voice.name),
-          voice => voice.lang === 'fr-ML' && /female|woman/i.test(voice.name),
-          voice => voice.lang === 'fr-BF' && /female|woman/i.test(voice.name),
-          // Warm, comforting French voices
-          voice => voice.lang.startsWith('fr') && 
-                   /aminata|fatou|mariama|aicha|khadija|binta|coumba|rama|amélie|chloé|léa|soft|calme|douce|chaud/i.test(voice.name),
-          // Fallback to female French voice, avoiding formal tones
-          voice => voice.lang.startsWith('fr') && /female|woman/i.test(voice.name) && !/marie|julie|celine/i.test(voice.name),
-          // French Canadian female as secondary fallback
-          voice => voice.lang === 'fr-CA' && /female|woman/i.test(voice.name),
-          // Default French voice
+          voice => voice.lang === 'fr-CM' && /aminata|fatou|mariama|aicha|khadija|binta|coumba|rama|female|femme|dame/i.test(voice.name),
+          voice => voice.lang === 'fr-SN' && /aminata|fatou|mariama|aicha|khadija|binta|coumba|rama|female|femme|dame/i.test(voice.name),
+          voice => voice.lang === 'fr-CI' && /aminata|fatou|mariama|aicha|khadija|binta|coumba|rama|female|femme|dame/i.test(voice.name),
+          voice => voice.lang === 'fr-ML' && /aminata|fatou|mariama|aicha|khadija|binta|coumba|rama|female|femme|dame/i.test(voice.name),
+          voice => voice.lang === 'fr-BF' && /aminata|fatou|mariama|aicha|khadija|binta|coumba|rama|female|femme|dame/i.test(voice.name),
+          // Fallback to female French voices, avoiding overly formal ones
+          voice => voice.lang === 'fr-FR' && /female|femme|dame|amelie|anouk|audrey|sophie/i.test(voice.name) && !/marie|julie|celine/i.test(voice.name),
+          voice => voice.lang === 'fr-CA' && /female|femme|dame|amelie|anouk|audrey|sophie/i.test(voice.name),
+          // Any French voice
           voice => voice.lang.startsWith('fr')
         ];
 
@@ -121,7 +114,7 @@ const Home = () => {
       }
     }
 
-    console.log('No suitable female African voice found, using default browser voice');
+    console.log('No suitable female African voice found, using default female voice');
     return voices.find(voice => voice.lang.startsWith(isEnglish ? 'en' : 'fr')) || null;
   };
 
@@ -162,7 +155,7 @@ const Home = () => {
     return frenchMatches > englishMatches ? 'fr-CM' : 'en-ZA';
   };
 
-  // Enhanced speech synthesis for human-like, comforting female voice
+  // Enhanced speech synthesis with human-like, comforting female voice
   const speakTextCameroonStyle = (text, language = 'en-US') => {
     return new Promise(async (resolve, reject) => {
       window.speechSynthesis.cancel();
@@ -184,22 +177,21 @@ const Home = () => {
       }
 
       const isEnglish = !language.startsWith('fr');
-      // Adjusted for more human-like, comforting tone
-      utterance.rate = isEnglish ? 0.7 : 0.65; // Slower for warmth and clarity
-      utterance.pitch = isEnglish ? 0.95 : 0.97; // Slightly higher for softness
-      utterance.volume = 0.85; // Softer volume for comfort
+      utterance.rate = isEnglish ? 0.72 : 0.7; // Slower for a calm, comforting tone
+      utterance.pitch = isEnglish ? 0.88 : 0.85; // Lower pitch for warmth
+      utterance.volume = 0.95; // Slightly louder for clarity
 
       if (cleanedText.includes('!')) {
-        utterance.pitch = isEnglish ? 1.05 : 1.07; // Slight excitement
-        utterance.rate = isEnglish ? 0.65 : 0.6; // Slightly slower for emphasis
+        utterance.pitch = isEnglish ? 0.95 : 0.92; // Slightly higher for excitement
+        utterance.rate = isEnglish ? 0.68 : 0.65; // Slightly slower for emphasis
       } else if (cleanedText.includes('?')) {
-        utterance.pitch = isEnglish ? 1.1 : 1.12; // Higher for questioning tone
+        utterance.pitch = isEnglish ? 0.98 : 0.95; // Higher for questions
       }
       if (cleanedText.length > 200) {
-        utterance.rate += 0.05; // Slightly faster for long texts
+        utterance.rate += 0.03; // Slightly faster for long texts
       } else if (cleanedText.length < 50) {
-        utterance.rate -= 0.05; // Slower for short, comforting phrases
-        utterance.pitch -= 0.03; // Slightly deeper for warmth
+        utterance.rate -= 0.03; // Slower for short texts
+        utterance.pitch -= 0.03; // Deeper for emphasis
       }
 
       utterance.onstart = () => {
@@ -208,6 +200,7 @@ const Home = () => {
           wasListeningRef.current = true;
           setIsListening(false);
           SpeechRecognition.stopListening();
+          SpeechRecognition.abortListening();
           console.log('Mic stopped during speech playback');
         }
         setAudioError(null);
@@ -222,12 +215,12 @@ const Home = () => {
             SpeechRecognition.startListening({ 
               continuous: true, 
               interimResults: true, 
-              language: listeningLang 
+              language: listeningLang
             });
             console.log('Mic restarted after speech playback');
           } catch (error) {
-            console.error('Error restarting speech recognition:', error);
-            setAudioError('Failed to restart voice input after response.');
+            console.error('Error restarting SpeechRecognition after speech:', error);
+            setAudioError('Failed to restart voice input after speech.');
           }
         }
         resolve();
@@ -276,12 +269,10 @@ const Home = () => {
       return;
     }
 
-    // Determine language based on user preference or transcript
     const detectedLang = user?.language || detectCameroonLanguagePreference(transcript || '', user?.language);
     const listeningLang = detectedLang.startsWith('fr') ? 'fr-FR' : 'en-US';
 
     if (isListening) {
-      // Stop listening and clean up
       setIsListening(false);
       setIsMicInput(false);
       setStatus('');
@@ -301,6 +292,7 @@ const Home = () => {
           console.log('SpeechRecognition instance stopped and cleared');
         }
         SpeechRecognition.stopListening();
+        SpeechRecognition.abortListening();
       } catch (error) {
         console.error('Error stopping SpeechRecognition:', error);
         setAudioError('Failed to stop voice input. Please try again.');
@@ -312,7 +304,6 @@ const Home = () => {
         console.log('Silence timer cleared');
       }
     } else {
-      // Start listening with robust initialization
       setIsListening(true);
       setIsMicInput(true);
       setAudioError(null);
@@ -323,7 +314,6 @@ const Home = () => {
       isProcessingRef.current = false;
 
       try {
-        // Initialize a new SpeechRecognition instance
         speechRecognitionRef.current = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
         speechRecognitionRef.current.continuous = true;
         speechRecognitionRef.current.interimResults = true;
@@ -337,28 +327,21 @@ const Home = () => {
         };
 
         speechRecognitionRef.current.onerror = (error) => {
-          console.error('Speech recognition error:', error.error);
-          let errorMessage = 'Voice input error. Please try again.';
-          if (error.error === 'no-speech') {
-            errorMessage = 'No speech detected. Please speak clearly.';
-          } else if (error.error === 'not-allowed') {
-            errorMessage = 'Microphone access denied. Please enable microphone permissions.';
-          } else if (error.error === 'language-not-supported') {
-            errorMessage = `Language ${listeningLang} not supported. Switching to default.`;
-          }
-          setAudioError(errorMessage);
+          console.error('Speech recognition error:', error);
+          setAudioError(`Voice input error: ${error.error}. Please check microphone permissions or try again.`);
           setIsListening(false);
           setIsMicInput(false);
           setStatus('');
           setShowStatus(false);
           resetTranscript();
-          speechRecognitionRef.current = null;
+          lastTranscriptRef.current = '';
+          isProcessingRef.current = false;
         };
 
         speechRecognitionRef.current.onend = () => {
           console.log('Speech recognition ended');
           if (isListening && networkStatus === 'online' && !isProcessingRef.current) {
-            console.log('Restarting speech recognition with language:', listeningLang);
+            console.log('Restarting speech recognition');
             try {
               speechRecognitionRef.current = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
               speechRecognitionRef.current.continuous = true;
@@ -368,9 +351,9 @@ const Home = () => {
               speechRecognitionRef.current.onerror = speechRecognitionRef.current.onerror;
               speechRecognitionRef.current.onend = speechRecognitionRef.current.onend;
               speechRecognitionRef.current.start();
-              console.log('Speech recognition restarted');
+              console.log(`Speech recognition restarted with language: ${listeningLang}`);
             } catch (error) {
-              console.error('Error restarting speech recognition:', error);
+              console.error('Error restarting SpeechRecognition:', error);
               setAudioError('Failed to restart voice input. Please try again.');
               setIsListening(false);
               setIsMicInput(false);
@@ -488,29 +471,33 @@ const Home = () => {
               console.log('Speech recognition result:', currentTranscript);
             };
             speechRecognitionRef.current.onerror = (error) => {
-              console.error('Speech recognition error:', error.error);
-              let errorMessage = 'Voice input error. Please try again.';
-              if (error.error === 'no-speech') {
-                errorMessage = 'No speech detected. Please speak clearly.';
-              } else if (error.error === 'not-allowed') {
-                errorMessage = 'Microphone access denied. Please enable microphone permissions.';
-              } else if (error.error === 'language-not-supported') {
-                errorMessage = `Language ${listeningLang} not supported. Switching to default.`;
-              }
-              setAudioError(errorMessage);
+              console.error('Speech recognition error:', error);
+              setAudioError(`Voice input error: ${error.error}. Please check microphone permissions or try again.`);
               setIsListening(false);
               setIsMicInput(false);
               setStatus('');
               setShowStatus(false);
               resetTranscript();
-              speechRecognitionRef.current = null;
+              lastTranscriptRef.current = '';
+              isProcessingRef.current = false;
             };
-            speechRecognitionRef.current.onend = speechRecognitionRef.current.onend || (() => {
+            speechRecognitionRef.current.onend = () => {
+              console.log('Speech recognition ended');
               if (isListening && networkStatus === 'online' && !isProcessingRef.current) {
-                console.log('Restarting speech recognition with language:', listeningLang);
-                speechRecognitionRef.current.start();
+                console.log('Restarting speech recognition');
+                try {
+                  speechRecognitionRef.current.start();
+                  console.log(`Speech recognition restarted with language: ${listeningLang}`);
+                } catch (error) {
+                  console.error('Error restarting SpeechRecognition:', error);
+                  setAudioError('Failed to restart voice input. Please try again.');
+                  setIsListening(false);
+                  setIsMicInput(false);
+                  setStatus('');
+                  setShowStatus(false);
+                }
               }
-            });
+            };
             speechRecognitionRef.current.start();
             console.log(`Mic restarted with language: ${listeningLang}`);
           } catch (error) {
@@ -522,7 +509,7 @@ const Home = () => {
             setShowStatus(false);
           }
         }
-      }, 1500); // Reduced timeout for faster response
+      }, 2000);
     }
   }, [finalTranscript, isListening, networkStatus]);
 
@@ -539,9 +526,8 @@ const Home = () => {
         isProcessingRef.current = false;
         try {
           SpeechRecognition.stopListening();
+          SpeechRecognition.abortListening();
           if (speechRecognitionRef.current) {
-            speechRecognitionRef.current.stop();
-            speechRecognitionRef.current.abort();
             speechRecognitionRef.current.onresult = null;
             speechRecognitionRef.current.onerror = null;
             speechRecognitionRef.current.onend = null;
@@ -572,9 +558,8 @@ const Home = () => {
       if (isListening) {
         try {
           SpeechRecognition.stopListening();
+          SpeechRecognition.abortListening();
           if (speechRecognitionRef.current) {
-            speechRecognitionRef.current.stop();
-            speechRecognitionRef.current.abort();
             speechRecognitionRef.current.onresult = null;
             speechRecognitionRef.current.onerror = null;
             speechRecognitionRef.current.onend = null;
