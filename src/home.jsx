@@ -120,51 +120,30 @@ const Home = () => {
     return null;
   };
 
-  const speakTextCameroonStyle = (text, language = 'en-US') => {
+  const speakTextCameroonStyle = (text, language = 'en-ZA') => {
     return new Promise((resolve, reject) => {
       window.speechSynthesis.cancel();
       const cleanedText = stripEmojis(text);
       const utterance = new SpeechSynthesisUtterance(cleanedText);
       utterance.lang = language.startsWith('fr') ? 'fr-CM' : 'en-ZA';
-      utterance.rate = 0.75;
-      utterance.pitch = 0.95;
-      utterance.volume = 0.85;
+      utterance.volume = 0.9; // Slightly louder for clarity
+      utterance.rate = language.startsWith('fr') ? 0.85 : 0.8; // Slower for natural African cadence
+      utterance.pitch = language.startsWith('fr') ? 1.0 : 0.95; // Natural pitch, slightly higher for French
       
-      const isEnglish = !language.startsWith('fr');
-      if (isEnglish) {
-        utterance.rate = 0.7;
-        utterance.pitch = 0.9;
-        if (cleanedText.includes('!')) {
-          utterance.pitch = 1.0;
-          utterance.rate = 0.65;
-        }
-        if (cleanedText.includes('?')) {
-          utterance.pitch = 1.05;
-        }
-        if (cleanedText.length > 200) {
-          utterance.rate = 0.75;
-        }
-        if (cleanedText.length < 50) {
-          utterance.rate = 0.65;
-          utterance.pitch = 0.85;
-        }
-      } else {
-        utterance.rate = 0.72;
-        utterance.pitch = 0.92;
-        if (cleanedText.includes('!')) {
-          utterance.pitch = 1.0;
-          utterance.rate = 0.68;
-        }
-        if (cleanedText.includes('?')) {
-          utterance.pitch = 1.08;
-        }
-        if (cleanedText.length > 200) {
-          utterance.rate = 0.78;
-        }
-        if (cleanedText.length < 50) {
-          utterance.rate = 0.68;
-          utterance.pitch = 0.88;
-        }
+      // Adjust for expressiveness
+      if (cleanedText.includes('!')) {
+        utterance.pitch += 0.1;
+        utterance.rate -= 0.05;
+      }
+      if (cleanedText.includes('?')) {
+        utterance.pitch += 0.15;
+      }
+      if (cleanedText.length > 150) {
+        utterance.rate -= 0.05; // Slower for longer sentences
+      }
+      if (cleanedText.length < 50) {
+        utterance.rate += 0.05; // Faster for short sentences
+        utterance.pitch -= 0.05;
       }
 
       utterance.onstart = () => {
@@ -182,10 +161,16 @@ const Home = () => {
         console.log('Speech ended');
         if (wasListeningRef.current && networkStatus === 'online') {
           setIsListening(true);
+          setIsMicInput(true);
+          setStatus('listening...');
+          setShowStatus(true);
+          resetTranscript();
+          lastTranscriptRef.current = '';
+          isProcessingRef.current = false;
           SpeechRecognition.startListening({ 
             continuous: true, 
             interimResults: true, 
-            language: user?.language || 'en-US' 
+            language: user?.language?.startsWith('fr') ? 'fr-CM' : 'en-ZA' 
           });
           console.log('Mic restarted after speech playback');
         }
@@ -232,7 +217,7 @@ const Home = () => {
     return frenchMatches > englishMatches ? 'fr-CM' : 'en-ZA';
   };
 
-  const generateTtsAudio = async (text, language = 'en') => {
+  const generateTtsAudio = async (text, language = 'en-ZA') => {
     if (!text || text.trim() === '') {
       return [null, 'Invalid or empty text for audio generation'];
     }
@@ -240,7 +225,7 @@ const Home = () => {
       return [null, 'Speech synthesis not supported in this browser'];
     }
     try {
-      const africanLanguage = detectCameroonLanguagePreference(text, language);
+      const africanLanguage = detectCameroonLanguagePreference(text, user?.language);
       await speakTextCameroonStyle(text, africanLanguage);
       return [true, null];
     } catch (error) {
@@ -301,7 +286,7 @@ const Home = () => {
       SpeechRecognition.startListening({ 
         continuous: true, 
         interimResults: true, 
-        language: user?.language || 'en-US' 
+        language: user?.language?.startsWith('fr') ? 'fr-CM' : 'en-ZA' 
       });
       console.log('Mic started with new SpeechRecognition instance');
     }
@@ -380,15 +365,45 @@ const Home = () => {
       silenceTimerRef.current = setTimeout(() => {
         setIsMicInput(true);
         handleSendMessage(finalTranscript.trim());
+        // Reset and restart speech recognition for continuous input
+        setIsListening(false);
+        setStatus('');
+        setShowStatus(false);
         resetTranscript();
         lastTranscriptRef.current = '';
         isProcessingRef.current = false;
-        if (isListening && networkStatus === 'online') {
-          SpeechRecognition.startListening({ continuous: true, interimResults: true, language: user?.language || 'en-US' });
+        try {
+          SpeechRecognition.stopListening();
+          SpeechRecognition.abortListening();
+          if (speechRecognitionRef.current) {
+            speechRecognitionRef.current.onresult = null;
+            speechRecognitionRef.current.onerror = null;
+            speechRecognitionRef.current.onend = null;
+            speechRecognitionRef.current = null;
+          }
+        } catch (error) {
+          console.error('Error stopping SpeechRecognition:', error);
+        }
+        if (silenceTimerRef.current) {
+          clearTimeout(silenceTimerRef.current);
+          silenceTimerRef.current = null;
+        }
+        if (networkStatus === 'online') {
+          setIsListening(true);
+          setIsMicInput(true);
+          setStatus('listening...');
+          setShowStatus(true);
+          speechRecognitionRef.current = SpeechRecognition.getRecognition();
+          SpeechRecognition.startListening({ 
+            continuous: true, 
+            interimResults: true, 
+            language: user?.language?.startsWith('fr') ? 'fr-CM' : 'en-ZA' 
+          });
+          console.log('Mic restarted for next input');
         }
       }, 5000);
     }
-  }, [finalTranscript, isListening, networkStatus]);
+  }, [finalTranscript, isMicInput, networkStatus]);
 
   useEffect(() => {
     const handleNetworkChange = () => {
@@ -541,7 +556,7 @@ const Home = () => {
           );
           const cleanText = stripEmojis(latestResponse?.text);
           console.log('Generating audio for response:', cleanText);
-          const [audioSuccess, audioError] = await generateTtsAudio(cleanText, user?.language || 'en');
+          const [audioSuccess, audioError] = await generateTtsAudio(cleanText, user?.language || 'en-ZA');
           if (!audioSuccess) {
             console.warn('No audio generated:', audioError);
             setAudioError(audioError || 'Voice response unavailable. Displaying text response.');
