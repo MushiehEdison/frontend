@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom'; // Added for redirect
 import { 
   Users, 
   Activity, 
@@ -39,6 +40,7 @@ import {
 } from 'recharts';
 
 const AdminDashboard = () => {
+  const navigate = useNavigate(); // For redirecting to login
   const [activeTab, setActiveTab] = useState('overview');
   const [timeRange, setTimeRange] = useState('7d');
   const [searchTerm, setSearchTerm] = useState('');
@@ -78,8 +80,10 @@ const AdminDashboard = () => {
 
   // Fetch helper with error handling
   const fetchWithAuth = useCallback(async (url) => {
-    const token = localStorage.getItem('adminToken'); // Assumes token stored after sign-in
+    const token = localStorage.getItem('token'); // Changed from 'adminToken' to 'token'
     if (!token) {
+      setError('No authentication token found. Redirecting to login...');
+      setTimeout(() => navigate('/login'), 2000); // Redirect to login page
       throw new Error('No authentication token found');
     }
     const response = await fetch(url, {
@@ -88,12 +92,19 @@ const AdminDashboard = () => {
         'Content-Type': 'application/json'
       }
     });
-    if (response.status === 401) throw new Error('Unauthorized: Please sign in again');
-    if (response.status === 403) throw new Error('Admin access required');
+    if (response.status === 401) {
+      setError('Unauthorized: Please sign in again');
+      setTimeout(() => navigate('/login'), 2000);
+      throw new Error('Unauthorized');
+    }
+    if (response.status === 403) {
+      setError('Admin access required');
+      throw new Error('Admin access required');
+    }
     if (response.status === 400) throw new Error('Invalid request parameters');
     if (!response.ok) throw new Error(`HTTP error: ${response.status}`);
     return response.json();
-  }, []);
+  }, [navigate]);
 
   // Fetch all data for the active tab and time range
   const fetchDashboardData = useCallback(async () => {
@@ -101,13 +112,12 @@ const AdminDashboard = () => {
     setError(null);
     try {
       if (activeTab === 'overview') {
-        // Fetch user activity and sentiment
         const [activity, convs] = await Promise.all([
-          fetchWithAuth(`https://backend-b5jw.onrender.com/api/admin/analytics/user_activity?time_range=${timeRange}`),
-          fetchWithAuth('https://backend-b5jw.onrender.com/api/admin/analytics/conversations?page=1&per_page=10')
+          fetchWithAuth(`/api/admin/analytics/user_activity?time_range=${timeRange}`),
+          fetchWithAuth('/api/admin/analytics/conversations?page=1&per_page=10')
         ]);
         const conversationIds = convs.conversations.map(c => c.id).join(',');
-        const sentiment = conversationIds ? await fetchWithAuth(`https://backend-b5jw.onrender.com/api/admin/analytics/sentiment?conversation_ids=${conversationIds}`) : [];
+        const sentiment = conversationIds ? await fetchWithAuth(`/api/admin/analytics/sentiment?conversation_ids=${conversationIds}`) : [];
         setHourlyActivity(activity);
         setConversations(convs.conversations);
         setSentimentData(Object.entries(sentiment).map(([name, value]) => ({
@@ -115,7 +125,6 @@ const AdminDashboard = () => {
           value,
           color: sentimentColors[name] || '#888888'
         })));
-        // Fetch recent users (simulated from conversations)
         setRecentUsers(convs.conversations.slice(0, 5).map((conv, i) => ({
           id: conv.user_id,
           name: `User ${conv.user_id}`,
@@ -125,10 +134,9 @@ const AdminDashboard = () => {
           lastActive: conv.updated_at ? new Date(conv.updated_at).toLocaleTimeString() : 'N/A'
         })));
       } else if (activeTab === 'users') {
-        // Fetch user activity and conversations
         const [activity, convs] = await Promise.all([
-          fetchWithAuth(`https://backend-b5jw.onrender.com/api/admin/analytics/user_activity?time_range=${timeRange}`),
-          fetchWithAuth('https://backend-b5jw.onrender.com/api/admin/analytics/conversations?page=1&per_page=10')
+          fetchWithAuth(`/api/admin/analytics/user_activity?time_range=${timeRange}`),
+          fetchWithAuth('/api/admin/analytics/conversations?page=1&per_page=10')
         ]);
         setHourlyActivity(activity);
         setRecentUsers(convs.conversations.slice(0, 5).map((conv, i) => ({
@@ -142,23 +150,21 @@ const AdminDashboard = () => {
           avgSessionTime: `${Math.floor(Math.random() * 15) + 3} min`
         })));
       } else if (activeTab === 'analytics') {
-        // Fetch symptom trends, communication metrics, diagnostic patterns
         const [trends, comm, diagnostics] = await Promise.all([
-          fetchWithAuth(`https://backend-b5jw.onrender.com/api/admin/analytics/symptom_trends?time_range=${timeRange}`),
-          fetchWithAuth(`https://backend-b5jw.onrender.com/api/admin/analytics/communication_metrics?time_range=${timeRange}`),
-          fetchWithAuth(`https://backend-b5jw.onrender.com/api/admin/analytics/diagnostic_patterns?time_range=${timeRange}`)
+          fetchWithAuth(`/api/admin/analytics/symptom_trends?time_range=${timeRange}`),
+          fetchWithAuth(`/api/admin/analytics/communication_metrics?time_range=${timeRange}`),
+          fetchWithAuth(`/api/admin/analytics/diagnostic_patterns?time_range=${timeRange}`)
         ]);
         setSymptomTrends(trends);
         setCommunicationData(comm);
         setDiagnosticPatterns(diagnostics);
       } else if (activeTab === 'insights') {
-        // Fetch health alerts, treatment preferences, health literacy, workflow, AI performance
         const [alerts, prefs, literacy, workflow, ai] = await Promise.all([
-          fetchWithAuth('https://backend-b5jw.onrender.com/api/admin/analytics/health_alerts'),
-          fetchWithAuth(`https://backend-b5jw.onrender.com/api/admin/analytics/treatment_preferences?time_range=${timeRange}`),
-          fetchWithAuth(`https://backend-b5jw.onrender.com/api/admin/analytics/health_literacy?time_range=${timeRange}`),
-          fetchWithAuth(`https://backend-b5jw.onrender.com/api/admin/analytics/workflow_metrics?time_range=${timeRange}`),
-          fetchWithAuth(`https://backend-b5jw.onrender.com/api/admin/analytics/ai_performance?time_range=${timeRange}`)
+          fetchWithAuth('/api/admin/analytics/health_alerts'),
+          fetchWithAuth(`/api/admin/analytics/treatment_preferences?time_range=${timeRange}`),
+          fetchWithAuth(`/api/admin/analytics/health_literacy?time_range=${timeRange}`),
+          fetchWithAuth(`/api/admin/analytics/workflow_metrics?time_range=${timeRange}`),
+          fetchWithAuth(`/api/admin/analytics/ai_performance?time_range=${timeRange}`)
         ]);
         setHealthAlerts(alerts);
         setTreatmentPreferences(prefs);
@@ -167,19 +173,18 @@ const AdminDashboard = () => {
         setAiPerformance(ai);
       }
 
-      // Fetch dashboard stats for overview
       if (activeTab === 'overview') {
         const [activity, convs] = await Promise.all([
-          fetchWithAuth(`https://backend-b5jw.onrender.com/api/admin/analytics/user_activity?time_range=${timeRange}`),
-          fetchWithAuth('https://backend-b5jw.onrender.com/api/admin/analytics/conversations?page=1&per_page=10')
+          fetchWithAuth(`/api/admin/analytics/user_activity?time_range=${timeRange}`),
+          fetchWithAuth('/api/admin/analytics/conversations?page=1&per_page=10')
         ]);
         setDashboardData({
           totalUsers: convs.total,
           activeUsers: activity.reduce((sum, h) => sum + (h.users || 0), 0),
           totalConversations: convs.total,
-          avgSessionTime: 'N/A', // Requires session tracking endpoint
-          userGrowth: 0, // Requires historical user data endpoint
-          satisfactionRate: 0 // Requires user feedback endpoint
+          avgSessionTime: 'N/A',
+          userGrowth: 0,
+          satisfactionRate: 0
         });
       }
     } catch (err) {
@@ -200,12 +205,12 @@ const AdminDashboard = () => {
     if (activeTab !== 'insights') return;
     const interval = setInterval(async () => {
       try {
-        const alerts = await fetchWithAuth('https://backend-b5jw.onrender.com/api/admin/analytics/health_alerts');
+        const alerts = await fetchWithAuth('/api/admin/analytics/health_alerts');
         setHealthAlerts(alerts);
       } catch (err) {
         console.error('Error polling health alerts:', err);
       }
-    }, 60000); // Poll every minute
+    }, 60000);
     return () => clearInterval(interval);
   }, [activeTab, fetchWithAuth]);
 
@@ -214,7 +219,7 @@ const AdminDashboard = () => {
     fetchDashboardData();
   };
 
-  // Handle download (CSV export example)
+  // Handle download (CSV export)
   const handleDownload = () => {
     const data = activeTab === 'overview' ? hourlyActivity :
                  activeTab === 'users' ? recentUsers :
@@ -273,7 +278,6 @@ const AdminDashboard = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
       <header className="bg-white border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
@@ -314,7 +318,6 @@ const AdminDashboard = () => {
             Error: {error}
           </div>
         )}
-        {/* Navigation Tabs */}
         <div className="mb-8">
           <div className="flex space-x-2 bg-gray-100 p-1 rounded-lg w-fit">
             <TabButton id="overview" label="Overview" isActive={activeTab === 'overview'} onClick={setActiveTab} />
@@ -324,7 +327,6 @@ const AdminDashboard = () => {
           </div>
         </div>
 
-        {/* Overview Tab */}
         {activeTab === 'overview' && (
           <div className="space-y-8">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -338,21 +340,21 @@ const AdminDashboard = () => {
               <StatCard 
                 title="Active Users" 
                 value={dashboardData.activeUsers.toLocaleString()} 
-                change={0} // Requires historical data
+                change={0}
                 icon={Activity} 
                 color="green" 
               />
               <StatCard 
                 title="Total Conversations" 
                 value={dashboardData.totalConversations.toLocaleString()} 
-                change={0} // Requires historical data
+                change={0}
                 icon={MessageSquare} 
                 color="purple" 
               />
               <StatCard 
                 title="Avg Session Time" 
                 value={dashboardData.avgSessionTime} 
-                change={0} // Requires session tracking
+                change={0}
                 icon={Clock} 
                 color="orange" 
               />
@@ -443,7 +445,6 @@ const AdminDashboard = () => {
           </div>
         )}
 
-        {/* Users Tab */}
         {activeTab === 'users' && (
           <div className="space-y-6">
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
@@ -530,7 +531,6 @@ const AdminDashboard = () => {
           </div>
         )}
 
-        {/* Analytics Tab */}
         {activeTab === 'analytics' && (
           <div className="space-y-6">
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
@@ -613,7 +613,6 @@ const AdminDashboard = () => {
           </div>
         )}
 
-        {/* AI Insights Tab */}
         {activeTab === 'insights' && (
           <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -755,7 +754,7 @@ const AdminDashboard = () => {
                     <div className="flex-1">
                       <div className="font-medium text-gray-900">{alert.title}</div>
                       <div className="text-sm text-gray-600 mt-1">{alert.description}</div>
-                      <div className="text-xs text-gray-500 mt-2">{new Date(alert.time).toLocaleString()}</div>
+                      <div className="text-xs text-glray-500 mt-2">{new Date(alert.time).toLocaleString()}</div>
                     </div>
                     <button className="text-gray-400 hover:text-gray-600">
                       <Eye className="w-4 h-4" />
