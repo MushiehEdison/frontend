@@ -11,7 +11,13 @@ import AdminDashboard from './Admin';
 
 const AuthContext = createContext();
 
-export const useAuth = () => useContext(AuthContext);
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+};
 
 const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
@@ -115,19 +121,6 @@ const ProtectedRoute = ({ children, isAdminRoute = false }) => {
 };
 
 const App = () => {
-  const { user, loading } = useAuth();
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-transparent">
-        <div className="flex flex-col items-center space-y-4">
-          <div className="spinner border-4 border-gray-300 border-t-gray-800 rounded-full w-12 h-12 animate-spin"></div>
-          <p className="text-gray-600 text-lg font-semibold animate-pulse">Loading...</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <AuthProvider>
       <Router>
@@ -203,11 +196,9 @@ const App = () => {
             <Route
               path="*"
               element={
-                user && user.is_admin ? (
-                  <Navigate to="/admin" replace />
-                ) : (
+                <ProtectedRoute>
                   <Navigate to="/" replace />
-                )
+                </ProtectedRoute>
               }
             />
           </Routes>

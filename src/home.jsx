@@ -25,12 +25,7 @@ const Home = () => {
   const [isMicInput, setIsMicInput] = useState(false);
   const [audioError, setAudioError] = useState(null);
   const messagesEndRef = useRef(null);
-  const silenceTimerRef = useRef(null);
-  const messageIdCounter = useRef(1);
   const wasListeningRef = useRef(false);
-  const speechRecognitionRef = useRef(null);
-  const lastTranscriptRef = useRef('');
-  const isProcessingRef = useRef(false);
 
   const { transcript, interimTranscript, finalTranscript, resetTranscript, listening } = useSpeechRecognition();
 
@@ -57,7 +52,6 @@ const Home = () => {
     return cleanText;
   };
 
-  // Load voices asynchronously with a promise
   const loadVoicesForCameroon = () => {
     return new Promise((resolve) => {
       const voices = window.speechSynthesis.getVoices();
@@ -74,35 +68,28 @@ const Home = () => {
     });
   };
 
-  // Enhanced voice selection for female African voices
   const findCameroonFriendlyVoice = (voices, language) => {
     const isEnglish = !language.startsWith('fr');
     console.log('Available voices:', voices.map(v => ({ name: v.name, lang: v.lang })));
 
     const voicePreferences = isEnglish
       ? [
-          // Female African English voices
           voice => voice.lang === 'en-ZA' && /zara|amara|kanyinsola|adaora|akosua|female|woman|lady/i.test(voice.name),
           voice => voice.lang === 'en-NG' && /zara|amara|kanyinsola|adaora|akosua|female|woman|lady/i.test(voice.name),
           voice => voice.lang === 'en-KE' && /zara|amara|kanyinsola|adaora|akosua|female|woman|lady/i.test(voice.name),
           voice => voice.lang === 'en-GH' && /zara|amara|kanyinsola|adaora|akosua|female|woman|lady/i.test(voice.name),
           voice => voice.lang === 'en-CM' && /zara|amara|kanyinsola|adaora|akosua|female|woman|lady/i.test(voice.name),
-          // Fallback to any female English voice
-          voice => voice.lang.startsWith('en') && /female|woman|lady|kathy|princess|samantha|victoria|susan/i.test(voice.name),
-          // Any English voice
+          voice => voice.lang.startsWith('en') && /female|woman|lady|kathy|samantha|victoria|susan/i.test(voice.name),
           voice => voice.lang.startsWith('en')
         ]
       : [
-          // Female African French voices
           voice => voice.lang === 'fr-CM' && /aminata|fatou|mariama|aicha|khadija|binta|coumba|rama|female|femme|dame/i.test(voice.name),
           voice => voice.lang === 'fr-SN' && /aminata|fatou|mariama|aicha|khadija|binta|coumba|rama|female|femme|dame/i.test(voice.name),
           voice => voice.lang === 'fr-CI' && /aminata|fatou|mariama|aicha|khadija|binta|coumba|rama|female|femme|dame/i.test(voice.name),
           voice => voice.lang === 'fr-ML' && /aminata|fatou|mariama|aicha|khadija|binta|coumba|rama|female|femme|dame/i.test(voice.name),
           voice => voice.lang === 'fr-BF' && /aminata|fatou|mariama|aicha|khadija|binta|coumba|rama|female|femme|dame/i.test(voice.name),
-          // Fallback to female French voices, avoiding overly formal ones
           voice => voice.lang === 'fr-FR' && /female|femme|dame|amelie|anouk|audrey|sophie/i.test(voice.name) && !/marie|julie|celine/i.test(voice.name),
           voice => voice.lang === 'fr-CA' && /female|femme|dame|amelie|anouk|audrey|sophie/i.test(voice.name),
-          // Any French voice
           voice => voice.lang.startsWith('fr')
         ];
 
@@ -114,11 +101,10 @@ const Home = () => {
       }
     }
 
-    console.log('No suitable female African voice found, using default female voice');
+    console.log('No suitable female voice found, using default voice');
     return voices.find(voice => voice.lang.startsWith(isEnglish ? 'en' : 'fr')) || null;
   };
 
-  // Preprocess text for natural African speech
   const prepareTextForSpeech = (text) => {
     if (!text) return '';
     let cleanedText = text.replace(/[\p{Emoji}\p{Emoji_Presentation}\p{Emoji_Modifier}\p{Emoji_Modifier_Base}\p{Emoji_Component}\u{200D}\u{FE0F}]+/gu, '').trim();
@@ -127,7 +113,6 @@ const Home = () => {
     return cleanedText;
   };
 
-  // Enhanced language detection for African context
   const detectCameroonLanguagePreference = (text, userLanguage) => {
     const africanFrenchIndicators = [
       'bonjour', 'bonsoir', 'salut', 'comment', 'allez', 'vous', 'ça', 'va',
@@ -155,7 +140,6 @@ const Home = () => {
     return frenchMatches > englishMatches ? 'fr-CM' : 'en-ZA';
   };
 
-  // Enhanced speech synthesis with human-like, comforting female voice
   const speakTextCameroonStyle = (text, language = 'en-US') => {
     return new Promise(async (resolve, reject) => {
       window.speechSynthesis.cancel();
@@ -174,25 +158,15 @@ const Home = () => {
       const selectedVoice = findCameroonFriendlyVoice(voices, language);
       if (selectedVoice) {
         utterance.voice = selectedVoice;
+      } else {
+        reject(new Error('No suitable voice available'));
+        return;
       }
 
       const isEnglish = !language.startsWith('fr');
-      utterance.rate = isEnglish ? 0.72 : 0.7; // Slower for a calm, comforting tone
-      utterance.pitch = isEnglish ? 0.88 : 0.85; // Lower pitch for warmth
-      utterance.volume = 0.95; // Slightly louder for clarity
-
-      if (cleanedText.includes('!')) {
-        utterance.pitch = isEnglish ? 0.95 : 0.92; // Slightly higher for excitement
-        utterance.rate = isEnglish ? 0.68 : 0.65; // Slightly slower for emphasis
-      } else if (cleanedText.includes('?')) {
-        utterance.pitch = isEnglish ? 0.98 : 0.95; // Higher for questions
-      }
-      if (cleanedText.length > 200) {
-        utterance.rate += 0.03; // Slightly faster for long texts
-      } else if (cleanedText.length < 50) {
-        utterance.rate -= 0.03; // Slower for short texts
-        utterance.pitch -= 0.03; // Deeper for emphasis
-      }
+      utterance.rate = isEnglish ? 0.75 : 0.72;
+      utterance.pitch = isEnglish ? 0.9 : 0.87;
+      utterance.volume = 0.95;
 
       utterance.onstart = () => {
         console.log(`Speech started in ${utterance.lang} with voice: ${utterance.voice?.name}`);
@@ -200,7 +174,6 @@ const Home = () => {
           wasListeningRef.current = true;
           setIsListening(false);
           SpeechRecognition.stopListening();
-          SpeechRecognition.abortListening();
           console.log('Mic stopped during speech playback');
         }
         setAudioError(null);
@@ -211,31 +184,22 @@ const Home = () => {
         if (wasListeningRef.current && networkStatus === 'online') {
           setIsListening(true);
           const listeningLang = language.startsWith('fr') ? 'fr-FR' : 'en-US';
-          try {
-            SpeechRecognition.startListening({ 
-              continuous: true, 
-              interimResults: true, 
-              language: listeningLang
-            });
-            console.log('Mic restarted after speech playback');
-          } catch (error) {
-            console.error('Error restarting SpeechRecognition after speech:', error);
-            setAudioError('Failed to restart voice input after speech.');
-          }
+          SpeechRecognition.startListening({ continuous: true, interimResults: true, language: listeningLang });
+          console.log(`Mic restarted with language: ${listeningLang}`);
         }
         resolve();
       };
 
       utterance.onerror = (error) => {
         console.error('Speech synthesis error:', error);
-        reject(new Error(`Speech synthesis failed: ${error.error}`));
+        setAudioError(`Speech synthesis failed: ${error.error}`);
+        reject(error);
       };
 
       window.speechSynthesis.speak(utterance);
     });
   };
 
-  // Updated TTS function
   const generateTtsAudio = async (text, language = 'en') => {
     if (!text || text.trim() === '') {
       return [null, 'Invalid or empty text for audio generation'];
@@ -278,31 +242,8 @@ const Home = () => {
       setStatus('');
       setShowStatus(false);
       resetTranscript();
-      lastTranscriptRef.current = '';
-      isProcessingRef.current = false;
-
-      try {
-        if (speechRecognitionRef.current) {
-          speechRecognitionRef.current.stop();
-          speechRecognitionRef.current.abort();
-          speechRecognitionRef.current.onresult = null;
-          speechRecognitionRef.current.onerror = null;
-          speechRecognitionRef.current.onend = null;
-          speechRecognitionRef.current = null;
-          console.log('SpeechRecognition instance stopped and cleared');
-        }
-        SpeechRecognition.stopListening();
-        SpeechRecognition.abortListening();
-      } catch (error) {
-        console.error('Error stopping SpeechRecognition:', error);
-        setAudioError('Failed to stop voice input. Please try again.');
-      }
-
-      if (silenceTimerRef.current) {
-        clearTimeout(silenceTimerRef.current);
-        silenceTimerRef.current = null;
-        console.log('Silence timer cleared');
-      }
+      SpeechRecognition.stopListening();
+      console.log('Mic stopped');
     } else {
       setIsListening(true);
       setIsMicInput(true);
@@ -310,60 +251,8 @@ const Home = () => {
       setStatus('listening...');
       setShowStatus(true);
       resetTranscript();
-      lastTranscriptRef.current = '';
-      isProcessingRef.current = false;
-
       try {
-        speechRecognitionRef.current = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
-        speechRecognitionRef.current.continuous = true;
-        speechRecognitionRef.current.interimResults = true;
-        speechRecognitionRef.current.lang = listeningLang;
-
-        speechRecognitionRef.current.onresult = (event) => {
-          const currentTranscript = Array.from(event.results)
-            .map(result => result[0].transcript)
-            .join('');
-          console.log('Speech recognition result:', currentTranscript);
-        };
-
-        speechRecognitionRef.current.onerror = (error) => {
-          console.error('Speech recognition error:', error);
-          setAudioError(`Voice input error: ${error.error}. Please check microphone permissions or try again.`);
-          setIsListening(false);
-          setIsMicInput(false);
-          setStatus('');
-          setShowStatus(false);
-          resetTranscript();
-          lastTranscriptRef.current = '';
-          isProcessingRef.current = false;
-        };
-
-        speechRecognitionRef.current.onend = () => {
-          console.log('Speech recognition ended');
-          if (isListening && networkStatus === 'online' && !isProcessingRef.current) {
-            console.log('Restarting speech recognition');
-            try {
-              speechRecognitionRef.current = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
-              speechRecognitionRef.current.continuous = true;
-              speechRecognitionRef.current.interimResults = true;
-              speechRecognitionRef.current.lang = listeningLang;
-              speechRecognitionRef.current.onresult = speechRecognitionRef.current.onresult;
-              speechRecognitionRef.current.onerror = speechRecognitionRef.current.onerror;
-              speechRecognitionRef.current.onend = speechRecognitionRef.current.onend;
-              speechRecognitionRef.current.start();
-              console.log(`Speech recognition restarted with language: ${listeningLang}`);
-            } catch (error) {
-              console.error('Error restarting SpeechRecognition:', error);
-              setAudioError('Failed to restart voice input. Please try again.');
-              setIsListening(false);
-              setIsMicInput(false);
-              setStatus('');
-              setShowStatus(false);
-            }
-          }
-        };
-
-        speechRecognitionRef.current.start();
+        SpeechRecognition.startListening({ continuous: true, interimResults: true, language: listeningLang });
         console.log(`Mic started with language: ${listeningLang}`);
       } catch (error) {
         console.error('Error starting SpeechRecognition:', error);
@@ -440,76 +329,26 @@ const Home = () => {
   }, [messages]);
 
   useEffect(() => {
-    if (finalTranscript.trim() && finalTranscript !== lastTranscriptRef.current && !isProcessingRef.current) {
-      console.log('Final transcript received:', finalTranscript, 'isMicInput:', isMicInput);
-      lastTranscriptRef.current = finalTranscript;
-      isProcessingRef.current = true;
-
-      if (silenceTimerRef.current) {
-        clearTimeout(silenceTimerRef.current);
-      }
-
-      silenceTimerRef.current = setTimeout(() => {
-        setIsMicInput(true);
-        handleSendMessage(finalTranscript.trim());
-        resetTranscript();
-        lastTranscriptRef.current = '';
-        isProcessingRef.current = false;
-
-        if (isListening && networkStatus === 'online') {
-          const detectedLang = detectCameroonLanguagePreference(finalTranscript, user?.language);
-          const listeningLang = detectedLang.startsWith('fr') ? 'fr-FR' : 'en-US';
-          try {
-            speechRecognitionRef.current = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
-            speechRecognitionRef.current.continuous = true;
-            speechRecognitionRef.current.interimResults = true;
-            speechRecognitionRef.current.lang = listeningLang;
-            speechRecognitionRef.current.onresult = (event) => {
-              const currentTranscript = Array.from(event.results)
-                .map(result => result[0].transcript)
-                .join('');
-              console.log('Speech recognition result:', currentTranscript);
-            };
-            speechRecognitionRef.current.onerror = (error) => {
-              console.error('Speech recognition error:', error);
-              setAudioError(`Voice input error: ${error.error}. Please check microphone permissions or try again.`);
-              setIsListening(false);
-              setIsMicInput(false);
-              setStatus('');
-              setShowStatus(false);
-              resetTranscript();
-              lastTranscriptRef.current = '';
-              isProcessingRef.current = false;
-            };
-            speechRecognitionRef.current.onend = () => {
-              console.log('Speech recognition ended');
-              if (isListening && networkStatus === 'online' && !isProcessingRef.current) {
-                console.log('Restarting speech recognition');
-                try {
-                  speechRecognitionRef.current.start();
-                  console.log(`Speech recognition restarted with language: ${listeningLang}`);
-                } catch (error) {
-                  console.error('Error restarting SpeechRecognition:', error);
-                  setAudioError('Failed to restart voice input. Please try again.');
-                  setIsListening(false);
-                  setIsMicInput(false);
-                  setStatus('');
-                  setShowStatus(false);
-                }
-              }
-            };
-            speechRecognitionRef.current.start();
-            console.log(`Mic restarted with language: ${listeningLang}`);
-          } catch (error) {
-            console.error('Error restarting SpeechRecognition:', error);
-            setAudioError('Failed to restart voice input. Please try again.');
-            setIsListening(false);
-            setIsMicInput(false);
-            setStatus('');
-            setShowStatus(false);
-          }
+    if (finalTranscript && finalTranscript.trim()) {
+      console.log('Processing final transcript:', finalTranscript);
+      setIsMicInput(true);
+      handleSendMessage(finalTranscript.trim());
+      resetTranscript();
+      if (isListening && networkStatus === 'online') {
+        const detectedLang = detectCameroonLanguagePreference(finalTranscript, user?.language);
+        const listeningLang = detectedLang.startsWith('fr') ? 'fr-FR' : 'en-US';
+        try {
+          SpeechRecognition.startListening({ continuous: true, interimResults: true, language: listeningLang });
+          console.log(`Mic restarted with language: ${listeningLang}`);
+        } catch (error) {
+          console.error('Error restarting SpeechRecognition:', error);
+          setAudioError('Failed to restart voice input. Please try again.');
+          setIsListening(false);
+          setIsMicInput(false);
+          setStatus('');
+          setShowStatus(false);
         }
-      }, 2000);
+      }
     }
   }, [finalTranscript, isListening, networkStatus]);
 
@@ -522,25 +361,7 @@ const Home = () => {
         setStatus('');
         setShowStatus(false);
         resetTranscript();
-        lastTranscriptRef.current = '';
-        isProcessingRef.current = false;
-        try {
-          SpeechRecognition.stopListening();
-          SpeechRecognition.abortListening();
-          if (speechRecognitionRef.current) {
-            speechRecognitionRef.current.onresult = null;
-            speechRecognitionRef.current.onerror = null;
-            speechRecognitionRef.current.onend = null;
-            speechRecognitionRef.current = null;
-          }
-        } catch (error) {
-          console.error('Error stopping SpeechRecognition on offline:', error);
-          setAudioError('Failed to stop voice input due to network issue.');
-        }
-        if (silenceTimerRef.current) {
-          clearTimeout(silenceTimerRef.current);
-          silenceTimerRef.current = null;
-        }
+        SpeechRecognition.stopListening();
         setAudioError('No internet connection. Voice input requires an active connection.');
         console.log('Mic stopped due to offline status');
       }
@@ -552,22 +373,8 @@ const Home = () => {
     return () => {
       window.removeEventListener('online', handleNetworkChange);
       window.removeEventListener('offline', handleNetworkChange);
-      if (silenceTimerRef.current) {
-        clearTimeout(silenceTimerRef.current);
-      }
       if (isListening) {
-        try {
-          SpeechRecognition.stopListening();
-          SpeechRecognition.abortListening();
-          if (speechRecognitionRef.current) {
-            speechRecognitionRef.current.onresult = null;
-            speechRecognitionRef.current.onerror = null;
-            speechRecognitionRef.current.onend = null;
-            speechRecognitionRef.current = null;
-          }
-        } catch (error) {
-          console.error('Error stopping SpeechRecognition on unmount:', error);
-        }
+        SpeechRecognition.stopListening();
       }
     };
   }, [isListening]);
@@ -575,7 +382,7 @@ const Home = () => {
   useEffect(() => {
     if ('speechSynthesis' in window) {
       loadVoicesForCameroon().then(voices => {
-        console.log(`Loaded ${voices.length} voices for Cameroon users`);
+        console.log(`Loaded ${voices.length} voices`);
         const frenchVoices = voices.filter(v => v.lang.startsWith('fr'));
         const englishVoices = voices.filter(v => v.lang.startsWith('en'));
         console.log(`French voices: ${frenchVoices.map(v => v.name).join(', ')}`);
@@ -607,7 +414,6 @@ const Home = () => {
       if (isMicInput) {
         setAudioError('Please sign in to use voice features.');
       }
-      isProcessingRef.current = false;
       return;
     }
 
@@ -627,7 +433,6 @@ const Home = () => {
         ]);
         localStorage.removeItem('token');
         navigate('/signin');
-        isProcessingRef.current = false;
         return;
       }
     } catch (error) {
@@ -643,7 +448,6 @@ const Home = () => {
       ]);
       localStorage.removeItem('token');
       navigate('/signin');
-      isProcessingRef.current = false;
       return;
     }
 
@@ -724,7 +528,6 @@ const Home = () => {
           setAudioError('Voice response unavailable. Displaying text response.');
         }
       }
-      isProcessingRef.current = false;
     } catch (error) {
       console.error('Error during POST request:', error);
       setShowStatus(false);
@@ -738,7 +541,6 @@ const Home = () => {
       if (isMicInput) {
         setAudioError('Failed to connect to server for audio response. Displaying text response.');
       }
-      isProcessingRef.current = false;
     }
   };
 
