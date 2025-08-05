@@ -78,7 +78,7 @@ const AuthProvider = ({ children }) => {
   );
 };
 
-const ProtectedRoute = ({ children }) => {
+const ProtectedRoute = ({ children, isAdminRoute = false }) => {
   const { user, loading } = useAuth();
 
   if (loading) {
@@ -95,6 +95,11 @@ const ProtectedRoute = ({ children }) => {
   if (!user) {
     console.log('ProtectedRoute: No user, redirecting to /intro');
     return <Navigate to="/intro" replace />;
+  }
+
+  if (isAdminRoute && !user.is_admin) {
+    console.log('ProtectedRoute: User is not admin, redirecting to /');
+    return <Navigate to="/" replace />;
   }
 
   return children;
@@ -166,9 +171,9 @@ const App = () => {
               }
             />
             <Route
-              path="/history"
+              path="/admin"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute isAdminRoute={true}>
                   <AdminDashboard />
                 </ProtectedRoute>
               }
