@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import EditProfile from './components/profile';
 import History from './components/history';
 import AllVisits from './components/visits';
@@ -8,6 +8,7 @@ import SignUp from './components/SignUp';
 import SignIn from './components/SignIn';
 import Intro from './components/intro';
 import AdminDashboard from './Admin';
+
 const AuthContext = createContext();
 
 export const useAuth = () => useContext(AuthContext);
@@ -80,6 +81,19 @@ const AuthProvider = ({ children }) => {
 
 const ProtectedRoute = ({ children, isAdminRoute = false }) => {
   const { user, loading } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!loading && user) {
+      if (user.is_admin && !isAdminRoute) {
+        console.log('ProtectedRoute: Admin user, redirecting to /admin');
+        navigate('/admin', { replace: true });
+      } else if (!user.is_admin && isAdminRoute) {
+        console.log('ProtectedRoute: Non-admin user, redirecting to /');
+        navigate('/', { replace: true });
+      }
+    }
+  }, [user, loading, isAdminRoute, navigate]);
 
   if (loading) {
     return (
@@ -97,15 +111,23 @@ const ProtectedRoute = ({ children, isAdminRoute = false }) => {
     return <Navigate to="/intro" replace />;
   }
 
-  if (isAdminRoute && !user.is_admin) {
-    console.log('ProtectedRoute: User is not admin, redirecting to /');
-    return <Navigate to="/" replace />;
-  }
-
   return children;
 };
 
 const App = () => {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-transparent">
+        <div className="flex flex-col items-center space-y-4">
+          <div className="spinner border-4 border-gray-300 border-t-gray-800 rounded-full w-12 h-12 animate-spin"></div>
+          <p className="text-gray-600 text-lg font-semibold animate-pulse">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <AuthProvider>
       <Router>
@@ -176,6 +198,16 @@ const App = () => {
                 <ProtectedRoute isAdminRoute={true}>
                   <AdminDashboard />
                 </ProtectedRoute>
+              }
+            />
+            <Route
+              path="*"
+              element={
+                user && user.is_admin ? (
+                  <Navigate to="/admin" replace />
+                ) : (
+                  <Navigate to="/" replace />
+                )
               }
             />
           </Routes>

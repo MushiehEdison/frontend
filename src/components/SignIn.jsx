@@ -8,7 +8,7 @@ const SignIn = () => {
     password: '',
   });
   const [errors, setErrors] = useState({});
-  const [showPassword, setShowPassword] = useState(false); // State for show/hide password
+  const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
   const { login } = useAuth();
 
@@ -59,7 +59,8 @@ const SignIn = () => {
         }
 
         login(data.token, data.user);
-        navigate('/');
+        // Redirect based on is_admin flag
+        navigate(data.user.is_admin ? '/admin' : '/', { replace: true });
       } catch (err) {
         setErrors({ submit: err.message });
       }
