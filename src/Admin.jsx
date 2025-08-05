@@ -279,7 +279,7 @@ const AdminDashboard = () => {
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center">
               <Heart className="w-8 h-8 text-blue-600 mr-3" />
-              <h1 className="text-xl font-bold text-gray-900">AI Health Assistant</h1>
+              <h1 className="text-xl font-bold text-gray-900">  𝐻𝑒𝒶𝓁𝐼𝒜 </h1>
               <span className="ml-2 px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full">Admin</span>
             </div>
             <div className="flex items-center space-x-4">
