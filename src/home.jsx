@@ -57,313 +57,197 @@ const Home = () => {
     return cleanText;
   };
 
-const findCameroonFriendlyVoice = (voices, language) => {
-  const isEnglish = !language.startsWith('fr');
-  
-  console.log('Available voices:', voices.map(v => ({ name: v.name, lang: v.lang })));
-  
-  if (isEnglish) {
-    // Priority for English with African accent preferences
-    const englishPreferences = [
-      // African English variants (if available)
-      voice => voice.lang === 'en-ZA' || // South African English
-               voice.lang === 'en-NG' || // Nigerian English  
-               voice.lang === 'en-KE' || // Kenyan English
-               voice.lang === 'en-GH' || // Ghanaian English
-               voice.lang === 'en-CM',   // Cameroon English (if available)
-      
-      // African-sounding voice names (common African names in TTS)
-      voice => voice.lang.startsWith('en') && 
-               (voice.name.toLowerCase().includes('nkosana') ||
-                voice.name.toLowerCase().includes('thabo') ||
-                voice.name.toLowerCase().includes('kanyinsola') ||
-                voice.name.toLowerCase().includes('adaora') ||
-                voice.name.toLowerCase().includes('zara') ||
-                voice.name.toLowerCase().includes('amara') ||
-                voice.name.toLowerCase().includes('kofi') ||
-                voice.name.toLowerCase().includes('akosua')),
-      
-      // Voices with warmer, deeper tones (often sound more African)
-      voice => voice.lang.startsWith('en') && 
-               (voice.name.toLowerCase().includes('deep') ||
-                voice.name.toLowerCase().includes('warm') ||
-                voice.name.toLowerCase().includes('rich') ||
-                voice.name.toLowerCase().includes('bass')),
-      
-      // US English voices that might sound closer to African accent
-      voice => voice.lang === 'en-US' && 
-               (voice.name.toLowerCase().includes('aaron') ||
-                voice.name.toLowerCase().includes('fred') ||
-                voice.name.toLowerCase().includes('junior') ||
-                voice.name.toLowerCase().includes('ralph') ||
-                voice.name.toLowerCase().includes('kathy') ||
-                voice.name.toLowerCase().includes('princess') ||
-                voice.name.toLowerCase().includes('cellos') ||
-                voice.name.toLowerCase().includes('bahh')),
-      
-      // British English as secondary option (but deprioritized)
-      voice => voice.lang === 'en-GB' && 
-               !voice.name.toLowerCase().includes('daniel') &&
-               !voice.name.toLowerCase().includes('arthur'),
-      
-      // Any other English voice as fallback
-      voice => voice.lang.startsWith('en'),
-    ];
-
-    for (const preference of englishPreferences) {
-      const matchingVoice = voices.find(preference);
-      if (matchingVoice) {
-        console.log('Selected African-friendly English voice:', matchingVoice.name, matchingVoice.lang);
-        return matchingVoice;
-      }
-    }
-  } else {
-    // Priority for French with African accent preferences
-    const frenchPreferences = [
-      // African French variants (if available)
-      voice => voice.lang === 'fr-CM' || // Cameroon French
-               voice.lang === 'fr-SN' || // Senegal French
-               voice.lang === 'fr-CI' || // Ivory Coast French
-               voice.lang === 'fr-ML' || // Mali French
-               voice.lang === 'fr-BF' || // Burkina Faso French
-               voice.lang === 'fr-TD' || // Chad French
-               voice.lang === 'fr-GA' || // Gabon French
-               voice.lang === 'fr-CG',   // Congo French
-      
-      // African-sounding French voice names
-      voice => voice.lang.startsWith('fr') && 
-               (voice.name.toLowerCase().includes('aminata') ||
-                voice.name.toLowerCase().includes('fatou') ||
-                voice.name.toLowerCase().includes('mariama') ||
-                voice.name.toLowerCase().includes('aicha') ||
-                voice.name.toLowerCase().includes('khadija') ||
-                voice.name.toLowerCase().includes('binta') ||
-                voice.name.toLowerCase().includes('coumba') ||
-                voice.name.toLowerCase().includes('rama')),
-      
-      // Warmer, deeper French voices
-      voice => voice.lang.startsWith('fr') && 
-               (voice.name.toLowerCase().includes('grave') ||
-                voice.name.toLowerCase().includes('profond') ||
-                voice.name.toLowerCase().includes('chaud') ||
-                voice.name.toLowerCase().includes('riche')),
-      
-      // Standard French but avoiding overly Parisian accents
-      voice => voice.lang === 'fr-FR' && 
-               !voice.name.toLowerCase().includes('marie') &&
-               !voice.name.toLowerCase().includes('julie') &&
-               !voice.name.toLowerCase().includes('celine'),
-      
-      // French Canadian might sound different/warmer
-      voice => voice.lang === 'fr-CA',
-      
-      // Any French voice as final fallback
-      voice => voice.lang.startsWith('fr'),
-    ];
-
-    for (const preference of frenchPreferences) {
-      const matchingVoice = voices.find(preference);
-      if (matchingVoice) {
-        console.log('Selected African-friendly French voice:', matchingVoice.name, matchingVoice.lang);
-        return matchingVoice;
-      }
-    }
-  }
-
-  console.log('No African-friendly voice found, using default browser voice');
-  return null;
-};
-
-// Enhanced speech parameters for African accent simulation
-const speakTextCameroonStyle = (text, language = 'en-US') => {
-  return new Promise((resolve, reject) => {
-    // Cancel any ongoing speech
-    window.speechSynthesis.cancel();
-
-    // Clean and prepare text for more natural speech
-    const cleanedText = prepareTextForSpeech(text);
+  const findCameroonFriendlyVoice = (voices, language) => {
+    const isEnglish = !language.startsWith('fr');
+    console.log('Available voices:', voices.map(v => ({ name: v.name, lang: v.lang })));
     
-    const utterance = new SpeechSynthesisUtterance(cleanedText);
-    
-    // Set language based on user preference with African variants
-    if (language.startsWith('fr')) {
-      // Try African French variants first, fallback to standard French
-      utterance.lang = 'fr-CM'; // Cameroon French
-      // If not supported, will fallback to fr-FR automatically
+    if (isEnglish) {
+      const englishPreferences = [
+        voice => voice.lang === 'en-ZA' || voice.lang === 'en-NG' || voice.lang === 'en-KE' || 
+                 voice.lang === 'en-GH' || voice.lang === 'en-CM',
+        voice => voice.lang.startsWith('en') && 
+                 (voice.name.toLowerCase().includes('nkosana') || voice.name.toLowerCase().includes('thabo') ||
+                  voice.name.toLowerCase().includes('kanyinsola') || voice.name.toLowerCase().includes('adaora') ||
+                  voice.name.toLowerCase().includes('zara') || voice.name.toLowerCase().includes('amara') ||
+                  voice.name.toLowerCase().includes('kofi') || voice.name.toLowerCase().includes('akosua')),
+        voice => voice.lang.startsWith('en') && 
+                 (voice.name.toLowerCase().includes('deep') || voice.name.toLowerCase().includes('warm') ||
+                  voice.name.toLowerCase().includes('rich') || voice.name.toLowerCase().includes('bass')),
+        voice => voice.lang === 'en-US' && 
+                 (voice.name.toLowerCase().includes('aaron') || voice.name.toLowerCase().includes('fred') ||
+                  voice.name.toLowerCase().includes('junior') || voice.name.toLowerCase().includes('ralph') ||
+                  voice.name.toLowerCase().includes('kathy') || voice.name.toLowerCase().includes('princess') ||
+                  voice.name.toLowerCase().includes('cellos') || voice.name.toLowerCase().includes('bahh')),
+        voice => voice.lang === 'en-GB' && 
+                 !voice.name.toLowerCase().includes('daniel') && !voice.name.toLowerCase().includes('arthur'),
+        voice => voice.lang.startsWith('en'),
+      ];
+      for (const preference of englishPreferences) {
+        const matchingVoice = voices.find(preference);
+        if (matchingVoice) {
+          console.log('Selected African-friendly English voice:', matchingVoice.name, matchingVoice.lang);
+          return matchingVoice;
+        }
+      }
     } else {
-      // Try African English variants first
-      utterance.lang = 'en-ZA'; // South African English
-      // If not supported, will fallback to en-US automatically
-    }
-    
-    // Optimize for African speech patterns (slightly different from European)
-    utterance.rate = 0.75;    // Comfortable conversational pace
-    utterance.pitch = 0.95;   // Slightly lower pitch (warmer tone)
-    utterance.volume = 0.85;  // Comfortable volume
-    
-    // Add natural pauses and emphasis typical of African speech patterns
-    addAfricanEmphasis(utterance, cleanedText, language);
-
-    utterance.onstart = () => {
-      console.log('African-style speech started in', utterance.lang);
-      if (isListening) {
-        wasListeningRef.current = true;
-        setIsListening(false);
-        SpeechRecognition.stopListening();
-        SpeechRecognition.abortListening();
-        console.log('Mic stopped during speech playback');
-      } else {
-        wasListeningRef.current = false;
+      const frenchPreferences = [
+        voice => voice.lang === 'fr-CM' || voice.lang === 'fr-SN' || voice.lang === 'fr-CI' || 
+                 voice.lang === 'fr-ML' || voice.lang === 'fr-BF' || voice.lang === 'fr-TD' || 
+                 voice.lang === 'fr-GA' || voice.lang === 'fr-CG',
+        voice => voice.lang.startsWith('fr') && 
+                 (voice.name.toLowerCase().includes('aminata') || voice.name.toLowerCase().includes('fatou') ||
+                  voice.name.toLowerCase().includes('mariama') || voice.name.toLowerCase().includes('aicha') ||
+                  voice.name.toLowerCase().includes('khadija') || voice.name.toLowerCase().includes('binta') ||
+                  voice.name.toLowerCase().includes('coumba') || voice.name.toLowerCase().includes('rama')),
+        voice => voice.lang.startsWith('fr') && 
+                 (voice.name.toLowerCase().includes('grave') || voice.name.toLowerCase().includes('profond') ||
+                  voice.name.toLowerCase().includes('chaud') || voice.name.toLowerCase().includes('riche')),
+        voice => voice.lang === 'fr-FR' && 
+                 !voice.name.toLowerCase().includes('marie') && !voice.name.toLowerCase().includes('julie') &&
+                 !voice.name.toLowerCase().includes('celine'),
+        voice => voice.lang === 'fr-CA',
+        voice => voice.lang.startsWith('fr'),
+      ];
+      for (const preference of frenchPreferences) {
+        const matchingVoice = voices.find(preference);
+        if (matchingVoice) {
+          console.log('Selected African-friendly French voice:', matchingVoice.name, matchingVoice.lang);
+          return matchingVoice;
+        }
       }
-      setAudioError(null);
-    };
-
-    utterance.onend = () => {
-      console.log('African-style speech ended, wasListening:', wasListeningRef.current);
-      if (wasListeningRef.current && networkStatus === 'online') {
-        setIsListening(true);
-        const listeningLang = language.startsWith('fr') ? 'fr-FR' : 'en-US';
-        SpeechRecognition.startListening({ 
-          continuous: true, 
-          interimResults: true, 
-          language: listeningLang
-        });
-        console.log('Mic restarted after speech playback');
-      }
-      resolve();
-    };
-
-    utterance.onerror = (error) => {
-      console.error('African speech synthesis error:', error);
-      reject(new Error(`African speech synthesis failed: ${error.error}`));
-    };
-
-    // Get the best African-friendly voice
-    const voices = window.speechSynthesis.getVoices();
-    const selectedVoice = findCameroonFriendlyVoice(voices, language);
-    
-    if (selectedVoice) {
-      utterance.voice = selectedVoice;
-      console.log('Selected African voice:', selectedVoice.name, 'Language:', selectedVoice.lang);
-    } else {
-      console.log('Using default browser voice with African speech parameters');
     }
+    console.log('No African-friendly voice found, using default browser voice');
+    return null;
+  };
 
-    // Speak with African rhythm and intonation
-    window.speechSynthesis.speak(utterance);
-  });
-};
-
-// New function for African speech emphasis patterns
-const addAfricanEmphasis = (utterance, text, language) => {
-  const isEnglish = !language.startsWith('fr');
-  
-  // African English tends to be more rhythmic and melodic
-  if (isEnglish) {
-    utterance.rate = 0.7;     // Slightly slower for clearer articulation
-    utterance.pitch = 0.9;    // Lower baseline pitch
-    
-    // Adjust for different types of content
-    if (text.includes('!')) {
-      utterance.pitch = 1.0;   // Rise for excitement but not too high
-      utterance.rate = 0.65;   // Slower for emphasis
-    }
-    
-    if (text.includes('?')) {
-      utterance.pitch = 1.05;  // Gentle rise for questions
-    }
-    
-    // Longer texts get slightly faster pace
-    if (text.length > 200) {
+  const speakTextCameroonStyle = (text, language = 'en-US') => {
+    return new Promise((resolve, reject) => {
+      window.speechSynthesis.cancel();
+      const cleanedText = stripEmojis(text);
+      const utterance = new SpeechSynthesisUtterance(cleanedText);
+      utterance.lang = language.startsWith('fr') ? 'fr-CM' : 'en-ZA';
       utterance.rate = 0.75;
-    }
-    
-    // Short responses are more deliberate
-    if (text.length < 50) {
-      utterance.rate = 0.65;
-      utterance.pitch = 0.85;  // Deeper for short responses
-    }
-  } else {
-    // African French tends to be more expressive and musical
-    utterance.rate = 0.72;    // Comfortable pace for French
-    utterance.pitch = 0.92;   // Slightly lower than European French
-    
-    if (text.includes('!')) {
-      utterance.pitch = 1.0;
-      utterance.rate = 0.68;
-    }
-    
-    if (text.includes('?')) {
-      utterance.pitch = 1.08;  // More pronounced rise in African French
-    }
-    
-    if (text.length > 200) {
-      utterance.rate = 0.78;
-    }
-    
-    if (text.length < 50) {
-      utterance.rate = 0.68;
-      utterance.pitch = 0.88;
-    }
-  }
-};
+      utterance.pitch = 0.95;
+      utterance.volume = 0.85;
+      
+      const isEnglish = !language.startsWith('fr');
+      if (isEnglish) {
+        utterance.rate = 0.7;
+        utterance.pitch = 0.9;
+        if (cleanedText.includes('!')) {
+          utterance.pitch = 1.0;
+          utterance.rate = 0.65;
+        }
+        if (cleanedText.includes('?')) {
+          utterance.pitch = 1.05;
+        }
+        if (cleanedText.length > 200) {
+          utterance.rate = 0.75;
+        }
+        if (cleanedText.length < 50) {
+          utterance.rate = 0.65;
+          utterance.pitch = 0.85;
+        }
+      } else {
+        utterance.rate = 0.72;
+        utterance.pitch = 0.92;
+        if (cleanedText.includes('!')) {
+          utterance.pitch = 1.0;
+          utterance.rate = 0.68;
+        }
+        if (cleanedText.includes('?')) {
+          utterance.pitch = 1.08;
+        }
+        if (cleanedText.length > 200) {
+          utterance.rate = 0.78;
+        }
+        if (cleanedText.length < 50) {
+          utterance.rate = 0.68;
+          utterance.pitch = 0.88;
+        }
+      }
 
-// Enhanced language detection for African context
-const detectCameroonLanguagePreference = (text, userLanguage) => {
-  // Common French words used in Cameroon and West/Central Africa
-  const africanFrenchIndicators = [
-    'bonjour', 'bonsoir', 'salut', 'comment', 'allez', 'vous', 'ça', 'va',
-    'merci', 'beaucoup', 'au revoir', 'oui', 'non', 'peut-être', 'pourquoi',
-    'comment', 'quand', 'où', 'qui', 'quoi', 'pardon', 'excusez', 'moi',
-    'santé', 'maladie', 'docteur', 'hôpital', 'médicament', 'traitement',
-    // Cameroon/African specific terms
-    'foufou', 'ndolé', 'poulet', 'poisson', 'marché', 'village', 'famille',
-    'frère', 'sœur', 'mama', 'papa', 'école', 'travail', 'argent', 'temps'
-  ];
-  
-  // Common English words with African/Cameroon context
-  const africanEnglishIndicators = [
-    'hello', 'good', 'morning', 'evening', 'how', 'are', 'you', 'fine',
-    'thank', 'welcome', 'please', 'sorry', 'excuse', 'me', 'yes', 'no',
-    'health', 'doctor', 'hospital', 'medicine', 'treatment', 'disease',
-    // African English expressions
-    'small', 'small', 'no', 'wahala', 'greet', 'family', 'brother', 'sister',
-    'mother', 'father', 'school', 'work', 'money', 'time', 'food', 'water'
-  ];
-  
-  const textLower = text.toLowerCase();
-  const frenchMatches = africanFrenchIndicators.filter(word => textLower.includes(word)).length;
-  const englishMatches = africanEnglishIndicators.filter(word => textLower.includes(word)).length;
-  
-  // User preference takes priority
-  if (userLanguage?.startsWith('fr')) return 'fr-CM'; // Cameroon French
-  if (userLanguage?.startsWith('en')) return 'en-ZA'; // South African English (closest to African accent)
-  
-  // Auto-detect based on content, defaulting to African variants
-  return frenchMatches > englishMatches ? 'fr-CM' : 'en-ZA';
-};
+      utterance.onstart = () => {
+        console.log('Speech started in', utterance.lang);
+        if (isListening) {
+          wasListeningRef.current = true;
+          setIsListening(false);
+          SpeechRecognition.stopListening();
+          console.log('Mic stopped during speech playback');
+        }
+        setAudioError(null);
+      };
 
-// Updated TTS function call with African preferences
-const generateTtsAudio = async (text, language = 'en') => {
-  if (!text || text.trim() === '') {
-    return [null, 'Invalid or empty text for audio generation'];
-  }
+      utterance.onend = () => {
+        console.log('Speech ended');
+        if (wasListeningRef.current && networkStatus === 'online') {
+          setIsListening(true);
+          SpeechRecognition.startListening({ 
+            continuous: true, 
+            interimResults: true, 
+            language: user?.language || 'en-US' 
+          });
+          console.log('Mic restarted after speech playback');
+        }
+        resolve();
+      };
 
-  // Check if Web Speech API is supported
-  if (!('speechSynthesis' in window)) {
-    return [null, 'Speech synthesis not supported in this browser'];
-  }
+      utterance.onerror = (error) => {
+        console.error('Speech synthesis error:', error);
+        reject(new Error(`Speech synthesis failed: ${error.error}`));
+      };
 
-  try {
-    // Detect African language preference
-    const africanLanguage = detectCameroonLanguagePreference(text, language);
-    await speakTextCameroonStyle(text, africanLanguage);
-    return [true, null]; // Success indicator
-  } catch (error) {
-    console.error('TTS error:', error);
-    return [null, error.message];
-  }
-};
+      const voices = window.speechSynthesis.getVoices();
+      const selectedVoice = findCameroonFriendlyVoice(voices, language);
+      if (selectedVoice) {
+        utterance.voice = selectedVoice;
+        console.log('Selected voice:', selectedVoice.name, selectedVoice.lang);
+      }
+
+      window.speechSynthesis.speak(utterance);
+    });
+  };
+
+  const detectCameroonLanguagePreference = (text, userLanguage) => {
+    const africanFrenchIndicators = [
+      'bonjour', 'bonsoir', 'salut', 'comment', 'allez', 'vous', 'ça', 'va', 'merci', 'beaucoup', 
+      'au revoir', 'oui', 'non', 'peut-être', 'pourquoi', 'comment', 'quand', 'où', 'qui', 'quoi', 
+      'pardon', 'excusez', 'moi', 'santé', 'maladie', 'docteur', 'hôpital', 'médicament', 'traitement',
+      'foufou', 'ndolé', 'poulet', 'poisson', 'marché', 'village', 'famille', 'frère', 'sœur', 'mama', 
+      'papa', 'école', 'travail', 'argent', 'temps'
+    ];
+    const africanEnglishIndicators = [
+      'hello', 'good', 'morning', 'evening', 'how', 'are', 'you', 'fine', 'thank', 'welcome', 'please', 
+      'sorry', 'excuse', 'me', 'yes', 'no', 'health', 'doctor', 'hospital', 'medicine', 'treatment', 
+      'disease', 'small', 'no', 'wahala', 'greet', 'family', 'brother', 'sister', 'mother', 'father', 
+      'school', 'work', 'money', 'time', 'food', 'water'
+    ];
+    
+    const textLower = text.toLowerCase();
+    const frenchMatches = africanFrenchIndicators.filter(word => textLower.includes(word)).length;
+    const englishMatches = africanEnglishIndicators.filter(word => textLower.includes(word)).length;
+    
+    if (userLanguage?.startsWith('fr')) return 'fr-CM';
+    if (userLanguage?.startsWith('en')) return 'en-ZA';
+    return frenchMatches > englishMatches ? 'fr-CM' : 'en-ZA';
+  };
+
+  const generateTtsAudio = async (text, language = 'en') => {
+    if (!text || text.trim() === '') {
+      return [null, 'Invalid or empty text for audio generation'];
+    }
+    if (!('speechSynthesis' in window)) {
+      return [null, 'Speech synthesis not supported in this browser'];
+    }
+    try {
+      const africanLanguage = detectCameroonLanguagePreference(text, language);
+      await speakTextCameroonStyle(text, africanLanguage);
+      return [true, null];
+    } catch (error) {
+      console.error('TTS error:', error);
+      return [null, error.message];
+    }
+  };
 
   const handleToggleListening = () => {
     console.log('Toggling listening:', isListening ? 'Stopping' : 'Starting');
@@ -372,13 +256,11 @@ const generateTtsAudio = async (text, language = 'en') => {
       setAudioError('No internet connection. Voice input requires an active connection.');
       return;
     }
-
     if (!SpeechRecognition.browserSupportsSpeechRecognition()) {
       console.log('Browser does not support speech recognition');
       setAudioError('Your browser does not support speech recognition.');
       return;
     }
-
     if (isListening) {
       setIsListening(false);
       setIsMicInput(false);
@@ -400,13 +282,11 @@ const generateTtsAudio = async (text, language = 'en') => {
       } catch (error) {
         console.error('Error stopping SpeechRecognition:', error);
       }
-
       if (silenceTimerRef.current) {
         clearTimeout(silenceTimerRef.current);
         silenceTimerRef.current = null;
         console.log('Silence timer cleared');
       }
-
       console.log('Mic fully stopped and reset');
     } else {
       setIsListening(true);
@@ -437,7 +317,6 @@ const generateTtsAudio = async (text, language = 'en') => {
       console.log('Skipping fetch: user, loading, or token missing', { user, loading, token });
       return;
     }
-
     const isValidId = conversationId && /^\d+$/.test(conversationId);
     console.log('Fetching messages for conversationId:', conversationId, 'Valid:', isValidId);
     const url = isValidId 
@@ -542,10 +421,8 @@ const generateTtsAudio = async (text, language = 'en') => {
         console.log('Mic stopped due to offline status');
       }
     };
-
     window.addEventListener('online', handleNetworkChange);
     window.addEventListener('offline', handleNetworkChange);
-
     return () => {
       window.removeEventListener('online', handleNetworkChange);
       window.removeEventListener('offline', handleNetworkChange);
@@ -569,30 +446,10 @@ const generateTtsAudio = async (text, language = 'en') => {
     };
   }, [isListening]);
 
-  // Add voice initialization for Cameroon users
-  useEffect(() => {
-    if ('speechSynthesis' in window) {
-      loadVoicesForCameroon().then(voices => {
-        console.log(`Loaded ${voices.length} voices for Cameroon users`);
-        
-        // Show available French and English voices
-        const frenchVoices = voices.filter(v => v.lang.startsWith('fr'));
-        const englishVoices = voices.filter(v => v.lang.startsWith('en'));
-        
-        console.log(`French voices available: ${frenchVoices.length}`);
-        console.log(`English voices available: ${englishVoices.length}`);
-      });
-    } else {
-      console.warn('Speech synthesis not supported in this browser');
-      setAudioError('Voice features not supported in this browser. Please use Chrome, Firefox, or Safari.');
-    }
-  }, []);
-
   const handleSendMessage = async (text) => {
     console.log('handleSendMessage called with text:', text, 'isMicInput:', isMicInput);
-    const token = localStorage.getItem('token');
     if (!token) {
-      console.error('No token found in localStorage');
+      console.error('No token found');
       setMessages((prev) => [
         ...prev,
         {
@@ -602,17 +459,12 @@ const generateTtsAudio = async (text, language = 'en') => {
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         },
       ]);
-      if (isMicInput) {
-        setAudioError('Please sign in to use voice features.');
-      }
-      isProcessingRef.current = false;
+      navigate('/signin');
       return;
     }
-
     try {
       const decoded = JSON.parse(atob(token.split('.')[1]));
-      const exp = decoded.exp * 1000;
-      if (Date.now() >= exp) {
+      if (Date.now() >= decoded.exp * 1000) {
         console.error('Token is expired');
         setMessages((prev) => [
           ...prev,
@@ -625,7 +477,6 @@ const generateTtsAudio = async (text, language = 'en') => {
         ]);
         localStorage.removeItem('token');
         navigate('/signin');
-        isProcessingRef.current = false;
         return;
       }
     } catch (error) {
@@ -641,10 +492,8 @@ const generateTtsAudio = async (text, language = 'en') => {
       ]);
       localStorage.removeItem('token');
       navigate('/signin');
-      isProcessingRef.current = false;
       return;
     }
-
     const newMessage = {
       id: generateUniqueId(),
       text,
@@ -653,17 +502,13 @@ const generateTtsAudio = async (text, language = 'en') => {
     };
     console.log('Sent user message:', newMessage);
     setMessages((prev) => [...prev, newMessage]);
-
     setStatus('framing...');
     setShowStatus(true);
-
     const isValidId = conversationId && /^\d+$/.test(conversationId);
     const url = isValidId
       ? `https://backend-b5jw.onrender.com/api/auth/conversation/${conversationId}`
       : 'https://backend-b5jw.onrender.com/api/auth/conversation';
-
-    console.log('Sending POST request to:', url, 'with body:', { message: text });
-
+    console.log('Sending POST request to:', url, 'with body:', { message: text, isMicInput });
     try {
       const response = await fetch(url, {
         method: 'POST',
@@ -672,14 +517,12 @@ const generateTtsAudio = async (text, language = 'en') => {
           'Authorization': `Bearer ${token}`,
         },
         credentials: 'include',
-        body: JSON.stringify({ message: text, isMicInput: isMicInput }),
+        body: JSON.stringify({ message: text, isMicInput }),
       });
-
       console.log('POST response status:', response.status);
       if (!response.ok) {
         throw new Error(`Failed to send message: ${response.status} ${response.statusText}`);
       }
-
       const data = await response.json();
       console.log('POST response data:', data);
       setShowStatus(false);
@@ -698,11 +541,8 @@ const generateTtsAudio = async (text, language = 'en') => {
           );
           const cleanText = stripEmojis(latestResponse?.text);
           console.log('Generating audio for response:', cleanText);
-          const [audioBase64, audioError] = await generateTtsAudio(cleanText, user?.language || 'en');
-          if (audioBase64) {
-            console.log('Playing audio response');
-            playAudio(audioBase64, cleanText);
-          } else {
+          const [audioSuccess, audioError] = await generateTtsAudio(cleanText, user?.language || 'en');
+          if (!audioSuccess) {
             console.warn('No audio generated:', audioError);
             setAudioError(audioError || 'Voice response unavailable. Displaying text response.');
           }
@@ -713,13 +553,15 @@ const generateTtsAudio = async (text, language = 'en') => {
         }
       } else {
         console.error('No valid messages in response:', data);
-        const errorResponse = {
-          id: generateUniqueId(),
-          text: 'I apologize, but I encountered an issue processing your request. Please try again.',
-          isUser: false,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        };
-        setMessages((prev) => [...prev, errorResponse]);
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: generateUniqueId(),
+            text: 'I apologize, but I encountered an issue processing your request. Please try again.',
+            isUser: false,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          },
+        ]);
         if (isMicInput) {
           setAudioError('Voice response unavailable. Displaying text response.');
         }
@@ -728,19 +570,22 @@ const generateTtsAudio = async (text, language = 'en') => {
     } catch (error) {
       console.error('Error during POST request:', error);
       setShowStatus(false);
-      const errorResponse = {
-        id: generateUniqueId(),
-        text: `Failed to connect to server: ${error.message}. Your message was sent but not saved. Please try again.`,
-        isUser: false,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      };
-      setMessages((prev) => [...prev, errorResponse]);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: generateUniqueId(),
+          text: `Failed to connect to server: ${error.message}. Please try again.`,
+          isUser: false,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        },
+      ]);
       if (isMicInput) {
         setAudioError('Failed to connect to server for audio response. Displaying text response.');
       }
       isProcessingRef.current = false;
     }
   };
+
   const updatedStyles = `
     .ripple-container {
       position: relative;
