@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Users, 
   Activity, 
@@ -42,76 +42,201 @@ const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState('overview');
   const [timeRange, setTimeRange] = useState('7d');
   const [searchTerm, setSearchTerm] = useState('');
+  const [error, setError] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
 
-  // Mock data - in real app, this would come from your API
+  // State for API data
   const [dashboardData, setDashboardData] = useState({
-    totalUsers: 2847,
-    activeUsers: 1924,
-    totalConversations: 15683,
-    avgSessionTime: '8.5 min',
-    userGrowth: 12.5,
-    satisfactionRate: 94.2
+    totalUsers: 0,
+    activeUsers: 0,
+    totalConversations: 0,
+    avgSessionTime: '0 min',
+    userGrowth: 0,
+    satisfactionRate: 0
   });
+  const [recentUsers, setRecentUsers] = useState([]);
+  const [symptomTrends, setSymptomTrends] = useState([]);
+  const [sentimentData, setSentimentData] = useState([]);
+  const [communicationData, setCommunicationData] = useState([]);
+  const [diagnosticPatterns, setDiagnosticPatterns] = useState([]);
+  const [hourlyActivity, setHourlyActivity] = useState([]);
+  const [healthAlerts, setHealthAlerts] = useState([]);
+  const [treatmentPreferences, setTreatmentPreferences] = useState([]);
+  const [healthLiteracy, setHealthLiteracy] = useState([]);
+  const [workflowMetrics, setWorkflowMetrics] = useState([]);
+  const [aiPerformance, setAiPerformance] = useState([]);
+  const [conversations, setConversations] = useState([]);
 
-  // Recent users data
-  const recentUsers = [
-    { id: 1, name: 'Sarah Johnson', email: 'sarah.j@email.com', joinedAt: '2025-08-04 14:30', status: 'active', lastActive: '2 min ago' },
-    { id: 2, name: 'Michael Chen', email: 'm.chen@email.com', joinedAt: '2025-08-04 13:45', status: 'active', lastActive: '15 min ago' },
-    { id: 3, name: 'Emma Williams', email: 'emma.w@email.com', joinedAt: '2025-08-04 12:20', status: 'inactive', lastActive: '2 hours ago' },
-    { id: 4, name: 'David Rodriguez', email: 'd.rodriguez@email.com', joinedAt: '2025-08-04 11:15', status: 'active', lastActive: '5 min ago' },
-    { id: 5, name: 'Lisa Thompson', email: 'lisa.t@email.com', joinedAt: '2025-08-04 10:45', status: 'active', lastActive: '1 min ago' }
-  ];
+  // Colors for sentiment pie chart
+  const sentimentColors = {
+    'Very Positive': '#10B981',
+    'Positive': '#34D399',
+    'Neutral': '#F59E0B',
+    'Negative': '#F87171',
+    'Very Negative': '#EF4444'
+  };
 
-  // Symptom trends data
-  const symptomTrends = [
-    { date: '2025-07-28', fever: 45, fatigue: 67, cough: 89, headache: 34, anxiety: 23 },
-    { date: '2025-07-29', fever: 52, fatigue: 71, cough: 94, headache: 41, anxiety: 28 },
-    { date: '2025-07-30', fever: 48, fatigue: 63, cough: 87, headache: 38, anxiety: 31 },
-    { date: '2025-07-31', fever: 61, fatigue: 79, cough: 102, headache: 45, anxiety: 25 },
-    { date: '2025-08-01', fever: 58, fatigue: 85, cough: 98, headache: 52, anxiety: 33 },
-    { date: '2025-08-02', fever: 64, fatigue: 91, cough: 105, headache: 48, anxiety: 29 },
-    { date: '2025-08-03', fever: 71, fatigue: 88, cough: 112, headache: 55, anxiety: 37 },
-    { date: '2025-08-04', fever: 69, fatigue: 93, cough: 108, headache: 51, anxiety: 42 }
-  ];
+  // Fetch helper with error handling
+  const fetchWithAuth = useCallback(async (url) => {
+    const token = localStorage.getItem('adminToken'); // Assumes token stored after sign-in
+    if (!token) {
+      throw new Error('No authentication token found');
+    }
+    const response = await fetch(url, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    if (response.status === 401) throw new Error('Unauthorized: Please sign in again');
+    if (response.status === 403) throw new Error('Admin access required');
+    if (response.status === 400) throw new Error('Invalid request parameters');
+    if (!response.ok) throw new Error(`HTTP error: ${response.status}`);
+    return response.json();
+  }, []);
 
-  // Patient sentiment data
-  const sentimentData = [
-    { name: 'Very Positive', value: 28, color: '#10B981' },
-    { name: 'Positive', value: 42, color: '#34D399' },
-    { name: 'Neutral', value: 23, color: '#F59E0B' },
-    { name: 'Negative', value: 5, color: '#F87171' },
-    { name: 'Very Negative', value: 2, color: '#EF4444' }
-  ];
+  // Fetch all data for the active tab and time range
+  const fetchDashboardData = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      if (activeTab === 'overview') {
+        // Fetch user activity and sentiment
+        const [activity, convs] = await Promise.all([
+          fetchWithAuth(`https://backend-b5jw.onrender.com/api/admin/analytics/user_activity?time_range=${timeRange}`),
+          fetchWithAuth('https://backend-b5jw.onrender.com/api/admin/analytics/conversations?page=1&per_page=10')
+        ]);
+        const conversationIds = convs.conversations.map(c => c.id).join(',');
+        const sentiment = conversationIds ? await fetchWithAuth(`https://backend-b5jw.onrender.com/api/admin/analytics/sentiment?conversation_ids=${conversationIds}`) : [];
+        setHourlyActivity(activity);
+        setConversations(convs.conversations);
+        setSentimentData(Object.entries(sentiment).map(([name, value]) => ({
+          name,
+          value,
+          color: sentimentColors[name] || '#888888'
+        })));
+        // Fetch recent users (simulated from conversations)
+        setRecentUsers(convs.conversations.slice(0, 5).map((conv, i) => ({
+          id: conv.user_id,
+          name: `User ${conv.user_id}`,
+          email: `user${conv.user_id}@example.com`,
+          joinedAt: conv.created_at,
+          status: 'active',
+          lastActive: conv.updated_at ? new Date(conv.updated_at).toLocaleTimeString() : 'N/A'
+        })));
+      } else if (activeTab === 'users') {
+        // Fetch user activity and conversations
+        const [activity, convs] = await Promise.all([
+          fetchWithAuth(`https://backend-b5jw.onrender.com/api/admin/analytics/user_activity?time_range=${timeRange}`),
+          fetchWithAuth('https://backend-b5jw.onrender.com/api/admin/analytics/conversations?page=1&per_page=10')
+        ]);
+        setHourlyActivity(activity);
+        setRecentUsers(convs.conversations.slice(0, 5).map((conv, i) => ({
+          id: conv.user_id,
+          name: `User ${conv.user_id}`,
+          email: `user${conv.user_id}@example.com`,
+          joinedAt: conv.created_at.split('T')[0],
+          status: 'active',
+          lastActive: conv.updated_at ? new Date(conv.updated_at).toLocaleTimeString() : 'N/A',
+          totalSessions: Math.floor(Math.random() * 50) + 1,
+          avgSessionTime: `${Math.floor(Math.random() * 15) + 3} min`
+        })));
+      } else if (activeTab === 'analytics') {
+        // Fetch symptom trends, communication metrics, diagnostic patterns
+        const [trends, comm, diagnostics] = await Promise.all([
+          fetchWithAuth(`https://backend-b5jw.onrender.com/api/admin/analytics/symptom_trends?time_range=${timeRange}`),
+          fetchWithAuth(`https://backend-b5jw.onrender.com/api/admin/analytics/communication_metrics?time_range=${timeRange}`),
+          fetchWithAuth(`https://backend-b5jw.onrender.com/api/admin/analytics/diagnostic_patterns?time_range=${timeRange}`)
+        ]);
+        setSymptomTrends(trends);
+        setCommunicationData(comm);
+        setDiagnosticPatterns(diagnostics);
+      } else if (activeTab === 'insights') {
+        // Fetch health alerts, treatment preferences, health literacy, workflow, AI performance
+        const [alerts, prefs, literacy, workflow, ai] = await Promise.all([
+          fetchWithAuth('https://backend-b5jw.onrender.com/api/admin/analytics/health_alerts'),
+          fetchWithAuth(`https://backend-b5jw.onrender.com/api/admin/analytics/treatment_preferences?time_range=${timeRange}`),
+          fetchWithAuth(`https://backend-b5jw.onrender.com/api/admin/analytics/health_literacy?time_range=${timeRange}`),
+          fetchWithAuth(`https://backend-b5jw.onrender.com/api/admin/analytics/workflow_metrics?time_range=${timeRange}`),
+          fetchWithAuth(`https://backend-b5jw.onrender.com/api/admin/analytics/ai_performance?time_range=${timeRange}`)
+        ]);
+        setHealthAlerts(alerts);
+        setTreatmentPreferences(prefs);
+        setHealthLiteracy(literacy);
+        setWorkflowMetrics(workflow);
+        setAiPerformance(ai);
+      }
 
-  // Communication effectiveness data
-  const communicationData = [
-    { metric: 'Understanding Rate', current: 94, previous: 91, trend: 'up' },
-    { metric: 'Follow-through Rate', current: 87, previous: 89, trend: 'down' },
-    { metric: 'Satisfaction Score', current: 4.6, previous: 4.4, trend: 'up' },
-    { metric: 'Completion Rate', current: 92, previous: 88, trend: 'up' }
-  ];
+      // Fetch dashboard stats for overview
+      if (activeTab === 'overview') {
+        const [activity, convs] = await Promise.all([
+          fetchWithAuth(`https://backend-b5jw.onrender.com/api/admin/analytics/user_activity?time_range=${timeRange}`),
+          fetchWithAuth('https://backend-b5jw.onrender.com/api/admin/analytics/conversations?page=1&per_page=10')
+        ]);
+        setDashboardData({
+          totalUsers: convs.total,
+          activeUsers: activity.reduce((sum, h) => sum + (h.users || 0), 0),
+          totalConversations: convs.total,
+          avgSessionTime: 'N/A', // Requires session tracking endpoint
+          userGrowth: 0, // Requires historical user data endpoint
+          satisfactionRate: 0 // Requires user feedback endpoint
+        });
+      }
+    } catch (err) {
+      setError(err.message);
+      console.error('Error fetching dashboard data:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [activeTab, timeRange, fetchWithAuth]);
 
-  // Diagnostic patterns
-  const diagnosticPatterns = [
-    { condition: 'Common Cold', frequency: 156, accuracy: 96 },
-    { condition: 'Anxiety Disorder', frequency: 134, accuracy: 89 },
-    { condition: 'Migraine', frequency: 98, accuracy: 92 },
-    { condition: 'Gastritis', frequency: 87, accuracy: 88 },
-    { condition: 'Insomnia', frequency: 76, accuracy: 94 },
-    { condition: 'Hypertension', frequency: 65, accuracy: 91 }
-  ];
+  // Initial fetch and timeRange/activeTab change
+  useEffect(() => {
+    fetchDashboardData();
+  }, [fetchDashboardData, activeTab, timeRange]);
 
-  // User activity by hour
-  const hourlyActivity = [
-    { hour: '00', users: 12 }, { hour: '01', users: 8 }, { hour: '02', users: 5 },
-    { hour: '03', users: 3 }, { hour: '04', users: 7 }, { hour: '05', users: 15 },
-    { hour: '06', users: 28 }, { hour: '07', users: 45 }, { hour: '08', users: 67 },
-    { hour: '09', users: 89 }, { hour: '10', users: 112 }, { hour: '11', users: 98 },
-    { hour: '12', users: 134 }, { hour: '13', users: 145 }, { hour: '14', users: 156 },
-    { hour: '15', users: 142 }, { hour: '16', users: 128 }, { hour: '17', users: 119 },
-    { hour: '18', users: 98 }, { hour: '19', users: 76 }, { hour: '20', users: 65 },
-    { hour: '21', users: 54 }, { hour: '22', users: 43 }, { hour: '23', users: 28 }
-  ];
+  // Polling for health alerts in Insights tab
+  useEffect(() => {
+    if (activeTab !== 'insights') return;
+    const interval = setInterval(async () => {
+      try {
+        const alerts = await fetchWithAuth('https://backend-b5jw.onrender.com/api/admin/analytics/health_alerts');
+        setHealthAlerts(alerts);
+      } catch (err) {
+        console.error('Error polling health alerts:', err);
+      }
+    }, 60000); // Poll every minute
+    return () => clearInterval(interval);
+  }, [activeTab, fetchWithAuth]);
+
+  // Handle refresh button
+  const handleRefresh = () => {
+    fetchDashboardData();
+  };
+
+  // Handle download (CSV export example)
+  const handleDownload = () => {
+    const data = activeTab === 'overview' ? hourlyActivity :
+                 activeTab === 'users' ? recentUsers :
+                 activeTab === 'analytics' ? symptomTrends :
+                 healthAlerts;
+    const csv = convertToCSV(data);
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${activeTab}_data_${new Date().toISOString()}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+  };
+
+  // Convert data to CSV
+  const convertToCSV = (data) => {
+    if (!data || data.length === 0) return '';
+    const headers = Object.keys(data[0]).join(',');
+    const rows = data.map(obj => Object.values(obj).map(val => `"${val}"`).join(',')).join('\n');
+    return `${headers}\n${rows}`;
+  };
 
   const StatCard = ({ title, value, change, icon: Icon, color = "blue" }) => (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
@@ -119,7 +244,7 @@ const AdminDashboard = () => {
         <div>
           <p className="text-sm font-medium text-gray-600">{title}</p>
           <p className="text-2xl font-bold text-gray-900 mt-2">{value}</p>
-          {change && (
+          {change !== undefined && (
             <div className={`flex items-center mt-2 text-sm ${change > 0 ? 'text-green-600' : 'text-red-600'}`}>
               {change > 0 ? <ArrowUp className="w-4 h-4 mr-1" /> : <ArrowDown className="w-4 h-4 mr-1" />}
               {Math.abs(change)}%
@@ -157,7 +282,6 @@ const AdminDashboard = () => {
               <h1 className="text-xl font-bold text-gray-900">AI Health Assistant</h1>
               <span className="ml-2 px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full">Admin</span>
             </div>
-            
             <div className="flex items-center space-x-4">
               <div className="flex items-center space-x-2">
                 <Filter className="w-4 h-4 text-gray-400" />
@@ -172,12 +296,10 @@ const AdminDashboard = () => {
                   <option value="90d">Last 3 months</option>
                 </select>
               </div>
-              
-              <button className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100">
+              <button onClick={handleRefresh} className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100">
                 <RefreshCw className="w-4 h-4" />
               </button>
-              
-              <button className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100">
+              <button onClick={handleDownload} className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100">
                 <Download className="w-4 h-4" />
               </button>
             </div>
@@ -186,6 +308,12 @@ const AdminDashboard = () => {
       </header>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {isLoading && <div className="text-center text-gray-600">Loading...</div>}
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-600 p-4 rounded-lg mb-4">
+            Error: {error}
+          </div>
+        )}
         {/* Navigation Tabs */}
         <div className="mb-8">
           <div className="flex space-x-2 bg-gray-100 p-1 rounded-lg w-fit">
@@ -199,7 +327,6 @@ const AdminDashboard = () => {
         {/* Overview Tab */}
         {activeTab === 'overview' && (
           <div className="space-y-8">
-            {/* Key Metrics */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               <StatCard 
                 title="Total Users" 
@@ -211,29 +338,26 @@ const AdminDashboard = () => {
               <StatCard 
                 title="Active Users" 
                 value={dashboardData.activeUsers.toLocaleString()} 
-                change={8.2}
+                change={0} // Requires historical data
                 icon={Activity} 
                 color="green" 
               />
               <StatCard 
                 title="Total Conversations" 
                 value={dashboardData.totalConversations.toLocaleString()} 
-                change={15.7}
+                change={0} // Requires historical data
                 icon={MessageSquare} 
                 color="purple" 
               />
               <StatCard 
                 title="Avg Session Time" 
                 value={dashboardData.avgSessionTime} 
-                change={-2.1}
+                change={0} // Requires session tracking
                 icon={Clock} 
                 color="orange" 
               />
             </div>
-
-            {/* Charts Row */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* User Activity by Hour */}
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Daily User Activity</h3>
                 <ResponsiveContainer width="100%" height={300}>
@@ -246,8 +370,6 @@ const AdminDashboard = () => {
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
-
-              {/* Patient Sentiment */}
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Patient Sentiment Analysis</h3>
                 <ResponsiveContainer width="100%" height={300}>
@@ -271,8 +393,6 @@ const AdminDashboard = () => {
                 </ResponsiveContainer>
               </div>
             </div>
-
-            {/* Recent Users */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-lg font-semibold text-gray-900">Recent Users</h3>
@@ -326,7 +446,6 @@ const AdminDashboard = () => {
         {/* Users Tab */}
         {activeTab === 'users' && (
           <div className="space-y-6">
-            {/* Search and Filters */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
                 <div className="relative">
@@ -352,15 +471,11 @@ const AdminDashboard = () => {
                 </div>
               </div>
             </div>
-
-            {/* User Statistics */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <StatCard title="New Users Today" value="47" change={23.5} icon={UserPlus} color="green" />
-              <StatCard title="Active Sessions" value="234" change={12.1} icon={Activity} color="blue" />
-              <StatCard title="User Retention" value="78%" change={5.2} icon={TrendingUp} color="purple" />
+              <StatCard title="New Users Today" value={0} change={0} icon={UserPlus} color="green" />
+              <StatCard title="Active Sessions" value={dashboardData.activeUsers} change={0} icon={Activity} color="blue" />
+              <StatCard title="User Retention" value="N/A" change={0} icon={TrendingUp} color="purple" />
             </div>
-
-            {/* Detailed User Table */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">All Users</h3>
               <div className="overflow-x-auto">
@@ -384,9 +499,9 @@ const AdminDashboard = () => {
                             <div className="text-sm text-gray-500">{user.email}</div>
                           </div>
                         </td>
-                        <td className="py-3 px-4 text-sm text-gray-600">{user.joinedAt.split(' ')[0]}</td>
-                        <td className="py-3 px-4 text-sm text-gray-600">{Math.floor(Math.random() * 50) + 1}</td>
-                        <td className="py-3 px-4 text-sm text-gray-600">{Math.floor(Math.random() * 15) + 3} min</td>
+                        <td className="py-3 px-4 text-sm text-gray-600">{user.joinedAt}</td>
+                        <td className="py-3 px-4 text-sm text-gray-600">{user.totalSessions}</td>
+                        <td className="py-3 px-4 text-sm text-gray-600">{user.avgSessionTime}</td>
                         <td className="py-3 px-4">
                           <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
                             user.status === 'active' 
@@ -418,7 +533,6 @@ const AdminDashboard = () => {
         {/* Analytics Tab */}
         {activeTab === 'analytics' && (
           <div className="space-y-6">
-            {/* Symptom Trends */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Symptom Trends & Disease Surveillance</h3>
               <ResponsiveContainer width="100%" height={400}>
@@ -436,8 +550,6 @@ const AdminDashboard = () => {
                 </LineChart>
               </ResponsiveContainer>
             </div>
-
-            {/* Communication Effectiveness */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Communication Effectiveness</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -461,8 +573,6 @@ const AdminDashboard = () => {
                 ))}
               </div>
             </div>
-
-            {/* Diagnostic Patterns */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">AI Diagnostic Patterns</h3>
               <div className="overflow-x-auto">
@@ -506,126 +616,68 @@ const AdminDashboard = () => {
         {/* AI Insights Tab */}
         {activeTab === 'insights' && (
           <div className="space-y-6">
-            {/* Key Insights Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              <div className="bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl p-6 text-white">
-                <div className="flex items-center mb-4">
-                  <Brain className="w-6 h-6 mr-2" />
-                  <h3 className="font-semibold">Mental Health Alert</h3>
+              {healthAlerts.slice(0, 3).map((alert, index) => (
+                <div key={index} className={`bg-gradient-to-r ${
+                  alert.severity === 'high' ? 'from-red-500 to-red-600' :
+                  alert.severity === 'medium' ? 'from-orange-500 to-orange-600' :
+                  'from-blue-500 to-blue-600'
+                } rounded-xl p-6 text-white`}>
+                  <div className="flex items-center mb-4">
+                    {alert.severity === 'high' ? <AlertTriangle className="w-6 h-6 mr-2" /> :
+                     alert.severity === 'medium' ? <Brain className="w-6 h-6 mr-2" /> :
+                     <Heart className="w-6 h-6 mr-2" />}
+                    <h3 className="font-semibold">{alert.title}</h3>
+                  </div>
+                  <p className="text-sm opacity-90 mb-2">{alert.description}</p>
+                  <button className="text-xs bg-white bg-opacity-20 px-3 py-1 rounded-full hover:bg-opacity-30">
+                    View Details
+                  </button>
                 </div>
-                <p className="text-sm opacity-90 mb-2">Increased anxiety-related conversations by 23% this week</p>
-                <button className="text-xs bg-white bg-opacity-20 px-3 py-1 rounded-full hover:bg-opacity-30">
-                  View Details
-                </button>
-              </div>
-
-              <div className="bg-gradient-to-r from-orange-500 to-orange-600 rounded-xl p-6 text-white">
-                <div className="flex items-center mb-4">
-                  <AlertTriangle className="w-6 h-6 mr-2" />
-                  <h3 className="font-semibold">Outbreak Detection</h3>
-                </div>
-                <p className="text-sm opacity-90 mb-2">Respiratory symptoms cluster detected in urban areas</p>
-                <button className="text-xs bg-white bg-opacity-20 px-3 py-1 rounded-full hover:bg-opacity-30">
-                  View Details
-                </button>
-              </div>
-
-              <div className="bg-gradient-to-r from-green-500 to-green-600 rounded-xl p-6 text-white">
-                <div className="flex items-center mb-4">
-                  <Heart className="w-6 h-6 mr-2" />
-                  <h3 className="font-semibold">Health Literacy</h3>
-                </div>
-                <p className="text-sm opacity-90 mb-2">92% patient understanding rate - above target</p>
-                <button className="text-xs bg-white bg-opacity-20 px-3 py-1 rounded-full hover:bg-opacity-30">
-                  View Details
-                </button>
-              </div>
+              ))}
             </div>
-
-            {/* AI Performance Metrics */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-6">AI Model Performance</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <h4 className="font-medium text-gray-700 mb-3">Response Quality Metrics</h4>
                   <div className="space-y-3">
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-600">Accuracy</span>
-                      <div className="flex items-center space-x-2">
-                        <div className="w-24 bg-gray-200 rounded-full h-2">
-                          <div className="bg-green-500 h-2 rounded-full" style={{ width: '94%' }}></div>
+                    {aiPerformance.quality && Object.entries(aiPerformance.quality).map(([key, value], index) => (
+                      <div key={index} className="flex justify-between items-center">
+                        <span className="text-sm text-gray-600">{key}</span>
+                        <div className="flex items-center space-x-2">
+                          <div className="w-24 bg-gray-200 rounded-full h-2">
+                            <div className="bg-green-500 h-2 rounded-full" style={{ width: `${value}%` }}></div>
+                          </div>
+                          <span className="text-sm font-medium">{value}%</span>
                         </div>
-                        <span className="text-sm font-medium">94%</span>
                       </div>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-600">Relevance</span>
-                      <div className="flex items-center space-x-2">
-                        <div className="w-24 bg-gray-200 rounded-full h-2">
-                          <div className="bg-blue-500 h-2 rounded-full" style={{ width: '91%' }}></div>
-                        </div>
-                        <span className="text-sm font-medium">91%</span>
-                      </div>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-600">Empathy Score</span>
-                      <div className="flex items-center space-x-2">
-                        <div className="w-24 bg-gray-200 rounded-full h-2">
-                          <div className="bg-purple-500 h-2 rounded-full" style={{ width: '87%' }}></div>
-                        </div>
-                        <span className="text-sm font-medium">87%</span>
-                      </div>
-                    </div>
+                    ))}
                   </div>
                 </div>
-                
                 <div>
                   <h4 className="font-medium text-gray-700 mb-3">Safety Metrics</h4>
                   <div className="space-y-3">
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-600">Safe Responses</span>
-                      <div className="flex items-center space-x-2">
-                        <div className="w-24 bg-gray-200 rounded-full h-2">
-                          <div className="bg-green-500 h-2 rounded-full" style={{ width: '99%' }}></div>
+                    {aiPerformance.safety && Object.entries(aiPerformance.safety).map(([key, value], index) => (
+                      <div key={index} className="flex justify-between items-center">
+                        <span className="text-sm text-gray-600">{key}</span>
+                        <div className="flex items-center space-x-2">
+                          <div className="w-24 bg-gray-200 rounded-full h-2">
+                            <div className="bg-blue-500 h-2 rounded-full" style={{ width: `${value}%` }}></div>
+                          </div>
+                          <span className="text-sm font-medium">{value}%</span>
                         </div>
-                        <span className="text-sm font-medium">99%</span>
                       </div>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-600">Referral Rate</span>
-                      <div className="flex items-center space-x-2">
-                        <div className="w-24 bg-gray-200 rounded-full h-2">
-                          <div className="bg-orange-500 h-2 rounded-full" style={{ width: '12%' }}></div>
-                        </div>
-                        <span className="text-sm font-medium">12%</span>
-                      </div>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-600">Error Detection</span>
-                      <div className="flex items-center space-x-2">
-                        <div className="w-24 bg-gray-200 rounded-full h-2">
-                          <div className="bg-blue-500 h-2 rounded-full" style={{ width: '96%' }}></div>
-                        </div>
-                        <span className="text-sm font-medium">96%</span>
-                      </div>
-                    </div>
+                    ))}
                   </div>
                 </div>
               </div>
             </div>
-
-            {/* Treatment Preferences & Health Literacy */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Treatment Preference Trends</h3>
                 <div className="space-y-4">
-                  {[
-                    { treatment: 'Natural Remedies', percentage: 68, trend: 'up' },
-                    { treatment: 'Prescription Medication', percentage: 45, trend: 'down' },
-                    { treatment: 'Lifestyle Changes', percentage: 78, trend: 'up' },
-                    { treatment: 'Telemedicine', percentage: 82, trend: 'up' },
-                    { treatment: 'Traditional Medicine', percentage: 34, trend: 'stable' }
-                  ].map((item, index) => (
+                  {treatmentPreferences.map((item, index) => (
                     <div key={index} className="flex items-center justify-between">
                       <span className="text-sm font-medium text-gray-700">{item.treatment}</span>
                       <div className="flex items-center space-x-3">
@@ -649,18 +701,10 @@ const AdminDashboard = () => {
                   ))}
                 </div>
               </div>
-
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Health Literacy by Demographics</h3>
                 <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={[
-                    { group: '18-25', understanding: 78, engagement: 85 },
-                    { group: '26-35', understanding: 82, engagement: 88 },
-                    { group: '36-45', understanding: 75, engagement: 79 },
-                    { group: '46-55', understanding: 68, engagement: 72 },
-                    { group: '56-65', understanding: 62, engagement: 65 },
-                    { group: '65+', understanding: 55, engagement: 58 }
-                  ]}>
+                  <BarChart data={healthLiteracy}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="group" />
                     <YAxis />
@@ -672,63 +716,26 @@ const AdminDashboard = () => {
                 </ResponsiveContainer>
               </div>
             </div>
-
-            {/* Workflow Optimization Insights */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Workflow & Operational Insights</h3>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="text-center p-4 bg-blue-50 rounded-lg">
-                  <div className="text-2xl font-bold text-blue-600 mb-2">4.2 min</div>
-                  <div className="text-sm font-medium text-gray-700">Avg Response Time</div>
-                  <div className="text-xs text-gray-500 mt-1">↓ 15% from last month</div>
-                </div>
-                <div className="text-center p-4 bg-green-50 rounded-lg">
-                  <div className="text-2xl font-bold text-green-600 mb-2">92%</div>
-                  <div className="text-sm font-medium text-gray-700">Session Completion</div>
-                  <div className="text-xs text-gray-500 mt-1">↑ 8% from last month</div>
-                </div>
-                <div className="text-center p-4 bg-purple-50 rounded-lg">
-                  <div className="text-2xl font-bold text-purple-600 mb-2">3.2%</div>
-                  <div className="text-sm font-medium text-gray-700">Drop-off Rate</div>
-                  <div className="text-xs text-gray-500 mt-1">↓ 22% from last month</div>
-                </div>
+                {workflowMetrics.map((metric, index) => (
+                  <div key={index} className={`text-center p-4 rounded-lg ${
+                    index === 0 ? 'bg-blue-50' : index === 1 ? 'bg-green-50' : 'bg-purple-50'
+                  }`}>
+                    <div className={`text-2xl font-bold ${
+                      index === 0 ? 'text-blue-600' : index === 1 ? 'text-green-600' : 'text-purple-600'
+                    } mb-2`}>{metric.value}</div>
+                    <div className="text-sm font-medium text-gray-700">{metric.metric}</div>
+                    <div className="text-xs text-gray-500 mt-1">{metric.change}</div>
+                  </div>
+                ))}
               </div>
             </div>
-
-            {/* Real-time Alerts */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Real-time Health Alerts</h3>
               <div className="space-y-3">
-                {[
-                  {
-                    type: 'warning',
-                    title: 'Unusual Symptom Pattern Detected',
-                    description: 'Spike in respiratory symptoms in downtown area',
-                    time: '2 minutes ago',
-                    severity: 'medium'
-                  },
-                  {
-                    type: 'info',
-                    title: 'Mental Health Trend',
-                    description: 'Increased stress-related conversations during evening hours',
-                    time: '15 minutes ago',
-                    severity: 'low'
-                  },
-                  {
-                    type: 'success',
-                    title: 'Model Performance',
-                    description: 'AI accuracy rate improved to 94.2%',
-                    time: '1 hour ago',
-                    severity: 'low'
-                  },
-                  {
-                    type: 'alert',
-                    title: 'High-Risk Patient Identified',
-                    description: 'Patient showing signs requiring immediate medical attention',
-                    time: '2 hours ago',
-                    severity: 'high'
-                  }
-                ].map((alert, index) => (
+                {healthAlerts.map((alert, index) => (
                   <div key={index} className={`flex items-start space-x-3 p-3 rounded-lg border ${
                     alert.severity === 'high' ? 'bg-red-50 border-red-200' :
                     alert.severity === 'medium' ? 'bg-orange-50 border-orange-200' :
@@ -748,7 +755,7 @@ const AdminDashboard = () => {
                     <div className="flex-1">
                       <div className="font-medium text-gray-900">{alert.title}</div>
                       <div className="text-sm text-gray-600 mt-1">{alert.description}</div>
-                      <div className="text-xs text-gray-500 mt-2">{alert.time}</div>
+                      <div className="text-xs text-gray-500 mt-2">{new Date(alert.time).toLocaleString()}</div>
                     </div>
                     <button className="text-gray-400 hover:text-gray-600">
                       <Eye className="w-4 h-4" />
