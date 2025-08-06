@@ -89,8 +89,8 @@ const AdminDashboard = () => {
       setTimeout(() => navigate('/login'), 2000);
       throw new Error('No authentication token found');
     }
-    const url = `${BASE_URL}${endpoint}`; // Prepend BASE_URL to endpoint
-    console.log(`Fetching: ${url}`); // Debug log to verify URL
+    const url = `${BASE_URL}${endpoint}`;
+    console.log(`Fetching: ${url}`);
     const response = await fetch(url, {
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -98,7 +98,7 @@ const AdminDashboard = () => {
       }
     });
     if (!response.ok) {
-      const text = await response.text(); // Get raw response for debugging
+      const text = await response.text();
       console.error(`Fetch error for ${url}: Status ${response.status}, Response: ${text.substring(0, 100)}`);
       if (response.status === 401) {
         setError('Unauthorized: Please sign in again');
@@ -122,44 +122,41 @@ const AdminDashboard = () => {
     setIsLoading(true);
     setError(null);
     try {
-      if (activeTab === 'overview') {
-        const [activity, convs] = await Promise.all([
+      if (activeTab === 'overview' || activeTab === 'users') {
+        const [activity, convs, users] = await Promise.all([
           fetchWithAuth(`/api/admin/analytics/user_activity?time_range=${timeRange}`),
-          fetchWithAuth('/api/admin/analytics/conversations?page=1&per_page=10')
+          fetchWithAuth('/api/admin/analytics/conversations?page=1&per_page=10'),
+          fetchWithAuth('/api/admin/users?page=1&per_page=10')
         ]);
         const conversationIds = convs.conversations.map(c => c.id).join(',');
         const sentiment = conversationIds ? await fetchWithAuth(`/api/admin/analytics/sentiment?conversation_ids=${conversationIds}`) : [];
         setHourlyActivity(activity);
         setConversations(convs.conversations);
-        setSentimentData(Object.entries(sentiment).map(([name, value]) => ({
-          name,
-          value,
-          color: sentimentColors[name] || '#888888'
+        setSentimentData(sentiment.map(entry => ({
+          name: entry.name,
+          value: entry.value,
+          color: sentimentColors[entry.name] || '#888888'
         })));
-        setRecentUsers(convs.conversations.slice(0, 5).map((conv, i) => ({
-          id: conv.user_id,
-          name: `User ${conv.user_id}`,
-          email: `user${conv.user_id}@example.com`,
-          joinedAt: conv.created_at,
-          status: 'active',
-          lastActive: conv.updated_at ? new Date(conv.updated_at).toLocaleTimeString() : 'N/A'
+        setRecentUsers(users.users.map(user => ({
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          joinedAt: new Date(user.joined_at).toISOString().split('T')[0],
+          status: user.status,
+          lastActive: user.last_active ? new Date(user.last_active).toLocaleTimeString() : 'N/A',
+          totalSessions: user.total_sessions,
+          avgSessionTime: user.avg_session_time ? `${Math.round(user.avg_session_time)} min` : 'N/A'
         })));
-      } else if (activeTab === 'users') {
-        const [activity, convs] = await Promise.all([
-          fetchWithAuth(`/api/admin/analytics/user_activity?time_range=${timeRange}`),
-          fetchWithAuth('/api/admin/analytics/conversations?page=1&per_page=10')
-        ]);
-        setHourlyActivity(activity);
-        setRecentUsers(convs.conversations.slice(0, 5).map((conv, i) => ({
-          id: conv.user_id,
-          name: `User ${conv.user_id}`,
-          email: `user${conv.user_id}@example.com`,
-          joinedAt: conv.created_at.split('T')[0],
-          status: 'active',
-          lastActive: conv.updated_at ? new Date(conv.updated_at).toLocaleTimeString() : 'N/A',
-          totalSessions: Math.floor(Math.random() * 50) + 1,
-          avgSessionTime: `${Math.floor(Math.random() * 15) + 3} min`
-        })));
+        if (activeTab === 'overview') {
+          setDashboardData({
+            totalUsers: users.total,
+            activeUsers: activity.reduce((sum, h) => sum + (h.users || 0), 0),
+            totalConversations: convs.total,
+            avgSessionTime: users.users.length ? `${Math.round(users.users.reduce((sum, u) => sum + u.avg_session_time, 0) / users.users.length)} min` : '0 min',
+            userGrowth: 0,
+            satisfactionRate: sentiment.find(s => s.name === 'Positive')?.value || 0
+          });
+        }
       } else if (activeTab === 'analytics') {
         const [trends, comm, diagnostics] = await Promise.all([
           fetchWithAuth(`/api/admin/analytics/symptom_trends?time_range=${timeRange}`),
@@ -183,21 +180,6 @@ const AdminDashboard = () => {
         setWorkflowMetrics(workflow);
         setAiPerformance(ai);
       }
-
-      if (activeTab === 'overview') {
-        const [activity, convs] = await Promise.all([
-          fetchWithAuth(`/api/admin/analytics/user_activity?time_range=${timeRange}`),
-          fetchWithAuth('/api/admin/analytics/conversations?page=1&per_page=10')
-        ]);
-        setDashboardData({
-          totalUsers: convs.total,
-          activeUsers: activity.reduce((sum, h) => sum + (h.users || 0), 0),
-          totalConversations: convs.total,
-          avgSessionTime: 'N/A',
-          userGrowth: 0,
-          satisfactionRate: 0
-        });
-      }
     } catch (err) {
       setError(err.message);
       console.error('Error fetching dashboard data:', err);
@@ -209,7 +191,10 @@ const AdminDashboard = () => {
   // Initial fetch and timeRange/activeTab change
   useEffect(() => {
     fetchDashboardData();
-  }, [fetchDashboardData, activeTab, timeRange]);
+    console.log('hourlyActivity:', hourlyActivity);
+    console.log('symptomTrends:', symptomTrends);
+    console.log('sentimentData:', sentimentData);
+  }, [fetchDashboardData]);
 
   // Polling for health alerts in Insights tab
   useEffect(() => {
