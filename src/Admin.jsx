@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom'; // Added for redirect
+import { useNavigate } from 'react-router-dom';
 import { 
   Users, 
   Activity, 
@@ -40,7 +40,7 @@ import {
 } from 'recharts';
 
 const AdminDashboard = () => {
-  const navigate = useNavigate(); // For redirecting to login
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('overview');
   const [timeRange, setTimeRange] = useState('7d');
   const [searchTerm, setSearchTerm] = useState('');
@@ -78,31 +78,42 @@ const AdminDashboard = () => {
     'Very Negative': '#EF4444'
   };
 
+  // Base URL for API requests
+  const BASE_URL = process.env.REACT_APP_API_URL || 'https://backend-b5jw.onrender.com';
+
   // Fetch helper with error handling
-  const fetchWithAuth = useCallback(async (url) => {
-    const token = localStorage.getItem('token'); // Changed from 'adminToken' to 'token'
+  const fetchWithAuth = useCallback(async (endpoint) => {
+    const token = localStorage.getItem('token');
     if (!token) {
       setError('No authentication token found. Redirecting to login...');
-      setTimeout(() => navigate('/login'), 2000); // Redirect to login page
+      setTimeout(() => navigate('/login'), 2000);
       throw new Error('No authentication token found');
     }
+    const url = `${BASE_URL}${endpoint}`; // Prepend BASE_URL to endpoint
+    console.log(`Fetching: ${url}`); // Debug log to verify URL
     const response = await fetch(url, {
       headers: {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'
       }
     });
-    if (response.status === 401) {
-      setError('Unauthorized: Please sign in again');
-      setTimeout(() => navigate('/login'), 2000);
-      throw new Error('Unauthorized');
+    if (!response.ok) {
+      const text = await response.text(); // Get raw response for debugging
+      console.error(`Fetch error for ${url}: Status ${response.status}, Response: ${text.substring(0, 100)}`);
+      if (response.status === 401) {
+        setError('Unauthorized: Please sign in again');
+        setTimeout(() => navigate('/login'), 2000);
+        throw new Error('Unauthorized');
+      }
+      if (response.status === 403) {
+        setError('Admin access required');
+        throw new Error('Admin access required');
+      }
+      if (response.status === 400) {
+        throw new Error('Invalid request parameters');
+      }
+      throw new Error(`HTTP error: ${response.status}`);
     }
-    if (response.status === 403) {
-      setError('Admin access required');
-      throw new Error('Admin access required');
-    }
-    if (response.status === 400) throw new Error('Invalid request parameters');
-    if (!response.ok) throw new Error(`HTTP error: ${response.status}`);
     return response.json();
   }, [navigate]);
 
@@ -754,7 +765,7 @@ const AdminDashboard = () => {
                     <div className="flex-1">
                       <div className="font-medium text-gray-900">{alert.title}</div>
                       <div className="text-sm text-gray-600 mt-1">{alert.description}</div>
-                      <div className="text-xs text-glray-500 mt-2">{new Date(alert.time).toLocaleString()}</div>
+                      <div className="text-xs text-gray-500 mt-2">{new Date(alert.time).toLocaleString()}</div>
                     </div>
                     <button className="text-gray-400 hover:text-gray-600">
                       <Eye className="w-4 h-4" />
