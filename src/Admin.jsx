@@ -128,107 +128,33 @@ const AdminDashboard = () => {
     }
   }, [navigate]);
 
-  // Generate sample data for charts when API data is empty
-  const generateSampleHourlyActivity = () => {
-    const hours = [];
-    for (let i = 0; i < 24; i++) {
-      hours.push({
-        hour: `${i.toString().padStart(2, '0')}:00`,
-        users: Math.floor(Math.random() * 50) + 10
-      });
-    }
-    return hours;
-  };
-
-  const generateSampleSymptomTrends = () => {
-    const dates = [];
-    const today = new Date();
-    for (let i = 6; i >= 0; i--) {
-      const date = new Date(today);
-      date.setDate(date.getDate() - i);
-      dates.push({
-        date: date.toISOString().split('T')[0],
-        fever: Math.floor(Math.random() * 20) + 5,
-        fatigue: Math.floor(Math.random() * 25) + 10,
-        cough: Math.floor(Math.random() * 30) + 15,
-        headache: Math.floor(Math.random() * 15) + 5,
-        anxiety: Math.floor(Math.random() * 20) + 8
-      });
-    }
-    return dates;
-  };
-
   // Fetch all data for the active tab and time range
   const fetchDashboardData = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
       if (activeTab === 'overview' || activeTab === 'users') {
-        let users;
-        try {
-          const [activity, convs, usersData] = await Promise.all([
-            fetchWithAuth(`/api/admin/analytics/user_activity?time_range=${timeRange}`).catch(() => generateSampleHourlyActivity()),
-            fetchWithAuth('/api/admin/analytics/conversations?page=1&per_page=10').catch(() => ({ conversations: [], total: 0 })),
-            fetchWithAuth('/api/admin/users?page=1&per_page=10').catch(() => ({
-              users: [
-                {
-                  id: 1,
-                  name: "Test User",
-                  email: "test@example.com",
-                  joined_at: "2025-08-01T12:00:00Z",
-                  status: "active",
-                  last_active: "2025-08-07T03:00:00Z",
-                  total_sessions: 5,
-                  avg_session_time: 10.5
-                }
-              ],
-              total: 1
-            }))
-          ]);
-          users = usersData;
-        } catch (e) {
-          console.warn("Using mock users data due to fetch error:", e);
-          users = {
-            users: [
-              {
-                id: 1,
-                name: "Test User",
-                email: "test@example.com",
-                joined_at: "2025-08-01T12:00:00Z",
-                status: "active",
-                last_active: "2025-08-07T03:00:00Z",
-                total_sessions: 5,
-                avg_session_time: 10.5
-              }
-            ],
-            total: 1
-          };
-        }
-        
+        const [activity, convs, usersData] = await Promise.all([
+          fetchWithAuth(`/api/admin/analytics/user_activity?time_range=${timeRange}`),
+          fetchWithAuth('/api/admin/analytics/conversations?page=1&per_page=10'),
+          fetchWithAuth('/api/admin/users?page=1&per_page=10')
+        ]);
+
         // Handle user activity data
-        const activityData = Array.isArray(activity) ? activity : generateSampleHourlyActivity();
-        setHourlyActivity(activityData);
+        setHourlyActivity(activity.map(item => ({
+          hour: item.hour.toString().padStart(2, '0') + ':00',
+          users: item.users
+        })));
         
         // Handle conversations data
-        const conversationData = convs.conversations || [];
-        setConversations(conversationData);
+        setConversations(convs.conversations || []);
         
         // Handle sentiment data
         let sentimentResult = [];
-        try {
-          if (conversationData.length > 0) {
-            const conversationIds = conversationData.map(c => c.id).join(',');
-            sentimentResult = await fetchWithAuth(`/api/admin/analytics/sentiment?conversation_ids=${conversationIds}`);
-          }
-        } catch (e) {
-          console.warn('Could not fetch sentiment data:', e);
-          sentimentResult = [
-            { name: 'Positive', value: 45, color: '#34D399' },
-            { name: 'Neutral', value: 30, color: '#F59E0B' },
-            { name: 'Negative', value: 25, color: '#F87171' }
-          ];
+        if (convs.conversations && convs.conversations.length > 0) {
+          const conversationIds = convs.conversations.map(c => c.id).join(',');
+          sentimentResult = await fetchWithAuth(`/api/admin/analytics/sentiment?conversation_ids=${conversationIds}`);
         }
-        
         setSentimentData(sentimentResult.map(entry => ({
           name: entry.name,
           value: entry.value,
@@ -236,13 +162,12 @@ const AdminDashboard = () => {
         })));
         
         // Handle users data
-        const usersData = users.users || [];
-        console.log("Recent users set:", usersData);
-        setRecentUsers(usersData.map(user => ({
+        const users = usersData.users || [];
+        console.log("Recent users set:", users);
+        setRecentUsers(users.map(user => ({
           id: user.id,
           name: user.name,
           email: user.email,
-          joinedAt: user.joined_at ? new Date(user.joined_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
           status: user.status || 'active',
           lastActive: user.last_active ? new Date(user.last_active).toLocaleTimeString() : 'N/A',
           totalSessions: user.total_sessions || 0,
@@ -250,125 +175,56 @@ const AdminDashboard = () => {
         })));
         
         if (activeTab === 'overview') {
-          const totalActiveUsers = activityData.reduce((sum, h) => sum + (h.users || 0), 0);
+          const totalActiveUsers = activity.reduce((sum, h) => sum + (h.users || 0), 0);
           const avgSentiment = sentimentResult.find(s => s.name === 'Positive')?.value || 0;
           
           setDashboardData({
-            totalUsers: users.total || 0,
+            totalUsers: usersData.total || 0,
             activeUsers: totalActiveUsers,
             totalConversations: convs.total || 0,
-            avgSessionTime: usersData.length ? `${Math.round(usersData.reduce((sum, u) => sum + (u.avg_session_time || 0), 0) / usersData.length)} min` : '0 min',
-            userGrowth: Math.floor(Math.random() * 15) + 5,
+            avgSessionTime: users.length ? `${Math.round(users.reduce((sum, u) => sum + (u.avg_session_time || 0), 0) / users.length)} min` : '0 min',
+            userGrowth: users.length > 0 ? Math.round((users.length / usersData.total) * 100) : 0,
             satisfactionRate: avgSentiment,
-            newUsersToday: Math.floor(Math.random() * 10) + 2,
+            newUsersToday: users.filter(u => {
+              const lastActive = new Date(u.last_active);
+              const today = new Date();
+              return lastActive.toDateString() === today.toDateString();
+            }).length,
             activeSessions: totalActiveUsers,
-            userRetention: `${Math.floor(Math.random() * 30) + 60}%`
+            userRetention: users.length > 0 ? `${Math.round((users.filter(u => u.status === 'active').length / users.length) * 100)}%` : '0%'
           });
         }
       } else if (activeTab === 'analytics') {
-        let trends, comm, diagnostics;
-        
-        try {
-          [trends, comm, diagnostics] = await Promise.all([
-            fetchWithAuth(`/api/admin/analytics/symptom_trends?time_range=${timeRange}`),
-            fetchWithAuth(`/api/admin/analytics/communication_metrics?time_range=${timeRange}`),
-            fetchWithAuth(`/api/admin/analytics/diagnostic_patterns?time_range=${timeRange}`)
-          ]);
-        } catch (e) {
-          console.warn('Using sample data for analytics:', e);
-          trends = generateSampleSymptomTrends();
-          comm = [
-            { metric: 'Response Quality', current: 92, previous: 88, trend: 'up' },
-            { metric: 'User Satisfaction', current: 87, previous: 85, trend: 'up' },
-            { metric: 'Resolution Rate', current: 78, previous: 82, trend: 'down' },
-            { metric: 'Avg Response Time', current: 1.2, previous: 1.5, trend: 'up' }
-          ];
-          diagnostics = [
-            { condition: 'Common Cold', frequency: 145, accuracy: 94 },
-            { condition: 'Migraine', frequency: 98, accuracy: 89 },
-            { condition: 'Anxiety', frequency: 87, accuracy: 91 },
-            { condition: 'Hypertension', frequency: 76, accuracy: 96 },
-            { condition: 'Diabetes', frequency: 65, accuracy: 93 }
-          ];
-        }
+        const [trends, comm, diagnostics] = await Promise.all([
+          fetchWithAuth(`/api/admin/analytics/symptom_trends?time_range=${timeRange}`),
+          fetchWithAuth(`/api/admin/analytics/communication_metrics?time_range=${timeRange}`),
+          fetchWithAuth(`/api/admin/analytics/diagnostic_patterns?time_range=${timeRange}`)
+        ]);
         
         setSymptomTrends(trends);
         setCommunicationData(comm);
         setDiagnosticPatterns(diagnostics);
       } else if (activeTab === 'insights') {
-        let alerts, prefs, literacy, workflow, ai;
-        
-        try {
-          [alerts, prefs, literacy, workflow, ai] = await Promise.all([
-            fetchWithAuth('/api/admin/analytics/health_alerts'),
-            fetchWithAuth(`/api/admin/analytics/treatment_preferences?time_range=${timeRange}`),
-            fetchWithAuth(`/api/admin/analytics/health_literacy?time_range=${timeRange}`),
-            fetchWithAuth(`/api/admin/analytics/workflow_metrics?time_range=${timeRange}`),
-            fetchWithAuth(`/api/admin/analytics/ai_performance?time_range=${timeRange}`)
-          ]);
-        } catch (e) {
-          console.warn('Using sample data for insights:', e);
-          alerts = [
-            {
-              id: 1,
-              title: 'Flu Season Alert',
-              description: 'Increased flu cases reported in the Littoral region',
-              severity: 'high',
-              time: new Date().toISOString()
-            },
-            {
-              id: 2,
-              title: 'Medication Shortage',
-              description: 'Low stock of essential medications detected',
-              severity: 'medium',
-              time: new Date().toISOString()
-            },
-            {
-              id: 3,
-              title: 'High Patient Volume',
-              description: 'Above average consultation requests today',
-              severity: 'low',
-              time: new Date().toISOString()
-            }
-          ];
-          prefs = [
-            { treatment: 'Telemedicine', percentage: 78, trend: 'up' },
-            { treatment: 'Traditional Medicine', percentage: 65, trend: 'stable' },
-            { treatment: 'Preventive Care', percentage: 58, trend: 'up' },
-            { treatment: 'Emergency Care', percentage: 42, trend: 'down' }
-          ];
-          literacy = [
-            { group: '18-25', understanding: 85, engagement: 92 },
-            { group: '26-35', understanding: 78, engagement: 87 },
-            { group: '36-50', understanding: 72, engagement: 82 },
-            { group: '50+', understanding: 68, engagement: 75 }
-          ];
-          workflow = [
-            { metric: 'Avg Consultation Time', value: '12.5 min', change: '-2.3%' },
-            { metric: 'Patient Satisfaction', value: '4.6/5', change: '+0.1%' },
-            { metric: 'System Uptime', value: '99.8%', change: '+0.2%' }
-          ];
-          ai = {
-            quality: {
-              'Accuracy': 94,
-              'Relevance': 89,
-              'Completeness': 87,
-              'Clarity': 92
-            },
-            safety: {
-              'Harm Detection': 98,
-              'Bias Prevention': 91,
-              'Privacy Protection': 96,
-              'Error Handling': 89
-            }
-          };
-        }
+        const [alerts, prefs, literacy, workflow, ai] = await Promise.all([
+          fetchWithAuth('/api/admin/analytics/health_alerts'),
+          fetchWithAuth(`/api/admin/analytics/treatment_preferences?time_range=${timeRange}`),
+          fetchWithAuth(`/api/admin/analytics/health_literacy?time_range=${timeRange}`),
+          fetchWithAuth(`/api/admin/analytics/workflow_metrics?time_range=${timeRange}`),
+          fetchWithAuth(`/api/admin/analytics/ai_performance?time_range=${timeRange}`)
+        ]);
         
         setHealthAlerts(alerts);
         setTreatmentPreferences(prefs);
         setHealthLiteracy(literacy);
         setWorkflowMetrics(workflow);
-        setAiPerformance(ai);
+        
+        // Transform aiPerformance data into quality and safety metrics
+        const aiData = ai.reduce((acc, item) => {
+          const category = item.metric.includes('Accuracy') || item.metric.includes('Relevance') ? 'quality' : 'safety';
+          acc[category][item.metric] = item.value;
+          return acc;
+        }, { quality: {}, safety: {} });
+        setAiPerformance(aiData);
       }
     } catch (err) {
       setError(err.message);
@@ -376,7 +232,7 @@ const AdminDashboard = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [activeTab, timeRange, fetchWithAuth]);
+  }, [activeTab, timeRange, fetchWithAuth, sentimentColors]);
 
   // Initial fetch and timeRange/activeTab change
   useEffect(() => {
@@ -591,7 +447,6 @@ const AdminDashboard = () => {
                     <thead>
                       <tr className="border-b border-gray-200">
                         <th className="text-left py-3 px-4 font-medium text-gray-700">User</th>
-                        <th className="text-left py-3 px-4 font-medium text-gray-700">Joined</th>
                         <th className="text-left py-3 px-4 font-medium text-gray-700">Status</th>
                         <th className="text-left py-3 px-4 font-medium text-gray-700">Last Active</th>
                         <th className="text-left py-3 px-4 font-medium text-gray-700">Actions</th>
@@ -606,7 +461,6 @@ const AdminDashboard = () => {
                               <div className="text-sm text-gray-500">{user.email}</div>
                             </div>
                           </td>
-                          <td className="py-3 px-4 text-sm text-gray-600">{user.joinedAt}</td>
                           <td className="py-3 px-4">
                             <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
                               user.status === 'active' 
@@ -674,7 +528,6 @@ const AdminDashboard = () => {
                     <thead>
                       <tr className="border-b border-gray-200">
                         <th className="text-left py-3 px-4 font-medium text-gray-700">User</th>
-                        <th className="text-left py-3 px-4 font-medium text-gray-700">Registration Date</th>
                         <th className="text-left py-3 px-4 font-medium text-gray-700">Total Sessions</th>
                         <th className="text-left py-3 px-4 font-medium text-gray-700">Avg Session Time</th>
                         <th className="text-left py-3 px-4 font-medium text-gray-700">Status</th>
@@ -690,7 +543,6 @@ const AdminDashboard = () => {
                               <div className="text-sm text-gray-500">{user.email}</div>
                             </div>
                           </td>
-                          <td className="py-3 px-4 text-sm text-gray-600">{user.joinedAt}</td>
                           <td className="py-3 px-4 text-sm text-gray-600">{user.totalSessions}</td>
                           <td className="py-3 px-4 text-sm text-gray-600">{user.avgSessionTime}</td>
                           <td className="py-3 px-4">
@@ -832,7 +684,7 @@ const AdminDashboard = () => {
                 <div>
                   <h4 className="font-medium text-gray-700 mb-3">Response Quality Metrics</h4>
                   <div className="space-y-3">
-                    {aiPerformance.quality && Object.entries(aiPerformance.quality).map(([key, value], index) => (
+                    {Object.entries(aiPerformance.quality).map(([key, value], index) => (
                       <div key={index} className="flex justify-between items-center">
                         <span className="text-sm text-gray-600">{key}</span>
                         <div className="flex items-center space-x-2">
@@ -848,7 +700,7 @@ const AdminDashboard = () => {
                 <div>
                   <h4 className="font-medium text-gray-700 mb-3">Safety Metrics</h4>
                   <div className="space-y-3">
-                    {aiPerformance.safety && Object.entries(aiPerformance.safety).map(([key, value], index) => (
+                    {Object.entries(aiPerformance.safety).map(([key, value], index) => (
                       <div key={index} className="flex justify-between items-center">
                         <span className="text-sm text-gray-600">{key}</span>
                         <div className="flex items-center space-x-2">
@@ -869,7 +721,7 @@ const AdminDashboard = () => {
                 <div className="space-y-4">
                   {treatmentPreferences.map((item, index) => (
                     <div key={index} className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-gray-700">{item.treatment}</span>
+                      <span className="text-sm font-medium text-gray-700">{item.treatment_type}</span>
                       <div className="flex items-center space-x-3">
                         <div className="w-32 bg-gray-200 rounded-full h-2">
                           <div 
@@ -896,12 +748,11 @@ const AdminDashboard = () => {
                 <ResponsiveContainer width="100%" height={300}>
                   <BarChart data={healthLiteracy}>
                     <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="group" />
+                    <XAxis dataKey="level" />
                     <YAxis />
                     <Tooltip />
                     <Legend />
-                    <Bar dataKey="understanding" fill="#3B82F6" name="Understanding Rate" />
-                    <Bar dataKey="engagement" fill="#10B981" name="Engagement Rate" />
+                    <Bar dataKey="percentage" fill="#3B82F6" name="Percentage" />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -917,7 +768,6 @@ const AdminDashboard = () => {
                       index === 0 ? 'text-blue-600' : index === 1 ? 'text-green-600' : 'text-purple-600'
                     } mb-2`}>{metric.value}</div>
                     <div className="text-sm font-medium text-gray-700">{metric.metric}</div>
-                    <div className="text-xs text-gray-500 mt-1">{metric.change}</div>
                   </div>
                 ))}
               </div>
@@ -945,7 +795,7 @@ const AdminDashboard = () => {
                     <div className="flex-1">
                       <div className="font-medium text-gray-900">{alert.title}</div>
                       <div className="text-sm text-gray-600 mt-1">{alert.description}</div>
-                      <div className="text-xs text-gray-500 mt-2">{new Date(alert.time).toLocaleString()}</div>
+                      <div className="text-xs text-gray-500 mt-2">{new Date(alert.created_at).toLocaleString()}</div>
                     </div>
                     <button className="text-gray-400 hover:text-gray-600">
                       <Eye className="w-4 h-4" />
