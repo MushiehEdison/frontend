@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Users, 
@@ -54,7 +54,9 @@ const AdminDashboard = () => {
     totalConversations: 0,
     avgSessionTime: '0 min',
     userGrowth: 0,
-    satisfactionRate: 0
+    satisfactionRate: 0,
+    newUsersToday: 0,
+    userRetention: 0
   });
   const [recentUsers, setRecentUsers] = useState([]);
   const [symptomTrends, setSymptomTrends] = useState([]);
@@ -69,13 +71,25 @@ const AdminDashboard = () => {
   const [aiPerformance, setAiPerformance] = useState([]);
   const [conversations, setConversations] = useState([]);
 
-  // Colors for sentiment pie chart
+  // Colors for charts
   const sentimentColors = {
     'Very Positive': '#10B981',
     'Positive': '#34D399',
     'Neutral': '#F59E0B',
     'Negative': '#F87171',
     'Very Negative': '#EF4444'
+  };
+
+  const symptomColors = {
+    fever: '#EF4444',
+    fatigue: '#F59E0B',
+    cough: '#3B82F6',
+    headache: '#8B5CF6',
+    anxiety: '#10B981',
+    pain: '#EC4899',
+    nausea: '#6B7280',
+    shortness_of_breath: '#14B8A6',
+    other: '#D1D5DB'
   };
 
   // Base URL for API requests
@@ -123,10 +137,11 @@ const AdminDashboard = () => {
     setError(null);
     try {
       if (activeTab === 'overview' || activeTab === 'users') {
-        const [activity, convs, users] = await Promise.all([
+        const [activity, convs, users, metrics] = await Promise.all([
           fetchWithAuth(`/api/admin/analytics/user_activity?time_range=${timeRange}`),
           fetchWithAuth('/api/admin/analytics/conversations?page=1&per_page=10'),
-          fetchWithAuth('/api/admin/users?page=1&per_page=10')
+          fetchWithAuth('/api/admin/users?page=1&per_page=10'),
+          fetchWithAuth(`/api/admin/analytics/user_metrics?time_range=${timeRange}`)
         ]);
         const conversationIds = convs.conversations.map(c => c.id).join(',');
         const sentiment = conversationIds ? await fetchWithAuth(`/api/admin/analytics/sentiment?conversation_ids=${conversationIds}`) : [];
@@ -141,22 +156,22 @@ const AdminDashboard = () => {
           id: user.id,
           name: user.name,
           email: user.email,
-          joinedAt: new Date(user.joined_at).toISOString().split('T')[0],
+          joinedAt: user.created_at ? new Date(user.created_at).toLocaleDateString() : 'N/A',
           status: user.status,
-          lastActive: user.last_active ? new Date(user.last_active).toLocaleTimeString() : 'N/A',
-          totalSessions: user.total_sessions,
+          lastActive: user.last_active ? new Date(user.last_active).toLocaleString() : 'N/A',
+          totalSessions: user.total_sessions || 0,
           avgSessionTime: user.avg_session_time ? `${Math.round(user.avg_session_time)} min` : 'N/A'
         })));
-        if (activeTab === 'overview') {
-          setDashboardData({
-            totalUsers: users.total,
-            activeUsers: activity.reduce((sum, h) => sum + (h.users || 0), 0),
-            totalConversations: convs.total,
-            avgSessionTime: users.users.length ? `${Math.round(users.users.reduce((sum, u) => sum + u.avg_session_time, 0) / users.users.length)} min` : '0 min',
-            userGrowth: 0,
-            satisfactionRate: sentiment.find(s => s.name === 'Positive')?.value || 0
-          });
-        }
+        setDashboardData({
+          totalUsers: users.total,
+          activeUsers: activity.reduce((sum, h) => sum + (h.users || 0), 0),
+          totalConversations: convs.total,
+          avgSessionTime: users.users.length ? `${Math.round(users.users.reduce((sum, u) => sum + (u.avg_session_time || 0), 0) / users.users.length)} min` : '0 min',
+          userGrowth: metrics.user_growth || 0,
+          satisfactionRate: sentiment.find(s => s.name === 'Positive')?.value || 0,
+          newUsersToday: metrics.new_users_today || 0,
+          userRetention: metrics.user_retention || 0
+        });
       } else if (activeTab === 'analytics') {
         const [trends, comm, diagnostics] = await Promise.all([
           fetchWithAuth(`/api/admin/analytics/symptom_trends?time_range=${timeRange}`),
@@ -191,9 +206,6 @@ const AdminDashboard = () => {
   // Initial fetch and timeRange/activeTab change
   useEffect(() => {
     fetchDashboardData();
-    console.log('hourlyActivity:', hourlyActivity);
-    console.log('symptomTrends:', symptomTrends);
-    console.log('sentimentData:', sentimentData);
   }, [fetchDashboardData]);
 
   // Polling for health alerts in Insights tab
@@ -238,6 +250,12 @@ const AdminDashboard = () => {
     const rows = data.map(obj => Object.values(obj).map(val => `"${val}"`).join(',')).join('\n');
     return `${headers}\n${rows}`;
   };
+
+  // Memoized symptom keys for dynamic chart rendering
+  const symptomKeys = useMemo(() => {
+    if (!symptomTrends.length) return [];
+    return Object.keys(symptomTrends[0]).filter(key => key !== 'date');
+  }, [symptomTrends]);
 
   const StatCard = ({ title, value, change, icon: Icon, color = "blue" }) => (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
@@ -358,37 +376,45 @@ const AdminDashboard = () => {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Daily User Activity</h3>
-                <ResponsiveContainer width="100%" height={300}>
-                  <AreaChart data={hourlyActivity}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="hour" />
-                    <YAxis />
-                    <Tooltip />
-                    <Area type="monotone" dataKey="users" stroke="#3B82F6" fill="#3B82F6" fillOpacity={0.1} />
-                  </AreaChart>
-                </ResponsiveContainer>
+                {hourlyActivity.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={300}>
+                    <AreaChart data={hourlyActivity}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="hour" />
+                      <YAxis />
+                      <Tooltip />
+                      <Area type="monotone" dataKey="users" stroke="#3B82F6" fill="#3B82F6" fillOpacity={0.1} />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="text-center text-gray-500">No activity data available</div>
+                )}
               </div>
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Patient Sentiment Analysis</h3>
-                <ResponsiveContainer width="100%" height={300}>
-                  <PieChart>
-                    <Pie
-                      data={sentimentData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={60}
-                      outerRadius={120}
-                      paddingAngle={2}
-                      dataKey="value"
-                    >
-                      {sentimentData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip formatter={(value) => [`${value}%`, 'Percentage']} />
-                    <Legend />
-                  </PieChart>
-                </ResponsiveContainer>
+                {sentimentData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={300}>
+                    <PieChart>
+                      <Pie
+                        data={sentimentData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={60}
+                        outerRadius={120}
+                        paddingAngle={2}
+                        dataKey="value"
+                      >
+                        {sentimentData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip formatter={(value) => [`${value}%`, 'Percentage']} />
+                      <Legend />
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="text-center text-gray-500">No sentiment data available</div>
+                )}
               </div>
             </div>
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
@@ -469,9 +495,27 @@ const AdminDashboard = () => {
               </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <StatCard title="New Users Today" value={0} change={0} icon={UserPlus} color="green" />
-              <StatCard title="Active Sessions" value={dashboardData.activeUsers} change={0} icon={Activity} color="blue" />
-              <StatCard title="User Retention" value="N/A" change={0} icon={TrendingUp} color="purple" />
+              <StatCard 
+                title="New Users Today" 
+                value={dashboardData.newUsersToday.toLocaleString()} 
+                change={0} 
+                icon={UserPlus} 
+                color="green" 
+              />
+              <StatCard 
+                title="Active Sessions" 
+                value={dashboardData.activeUsers.toLocaleString()} 
+                change={0} 
+                icon={Activity} 
+                color="blue" 
+              />
+              <StatCard 
+                title="User Retention" 
+                value={`${dashboardData.userRetention}%`} 
+                change={0} 
+                icon={TrendingUp} 
+                color="purple" 
+              />
             </div>
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">All Users</h3>
@@ -531,80 +575,100 @@ const AdminDashboard = () => {
           <div className="space-y-6">
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Symptom Trends & Disease Surveillance</h3>
-              <ResponsiveContainer width="100%" height={400}>
-                <LineChart data={symptomTrends}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="date" />
-                  <YAxis />
-                  <Tooltip />
-                  <Legend />
-                  <Line type="monotone" dataKey="fever" stroke="#EF4444" strokeWidth={2} />
-                  <Line type="monotone" dataKey="fatigue" stroke="#F59E0B" strokeWidth={2} />
-                  <Line type="monotone" dataKey="cough" stroke="#3B82F6" strokeWidth={2} />
-                  <Line type="monotone" dataKey="headache" stroke="#8B5CF6" strokeWidth={2} />
-                  <Line type="monotone" dataKey="anxiety" stroke="#10B981" strokeWidth={2} />
-                </LineChart>
-              </ResponsiveContainer>
+              {symptomTrends.length > 0 ? (
+                <ResponsiveContainer width="100%" height={400}>
+                  <LineChart data={symptomTrends}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="date" />
+                    <YAxis />
+                    <Tooltip />
+                    <Legend />
+                    {symptomKeys.map((key) => (
+                      <Line 
+                        key={key} 
+                        type="monotone" 
+                        dataKey={key} 
+                        stroke={symptomColors[key] || '#888888'} 
+                        strokeWidth={2} 
+                      />
+                    ))}
+                  </LineChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="text-center text-gray-500">No symptom data available</div>
+              )}
             </div>
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Communication Effectiveness</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                {communicationData.map((metric, index) => (
-                  <div key={index} className="p-4 border border-gray-200 rounded-lg">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-medium text-gray-600">{metric.metric}</span>
-                      <div className={`flex items-center text-xs ${
-                        metric.trend === 'up' ? 'text-green-600' : 'text-red-600'
-                      }`}>
-                        {metric.trend === 'up' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />}
+              {communicationData.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {communicationData.map((metric, index) => (
+                    <div key={index} className="p-4 border border-gray-200 rounded-lg">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-medium text-gray-600">{metric.metric}</span>
+                        <div className={`flex items-center text-xs ${
+                          metric.trend === 'up' ? 'text-green-600' : 'text-red-600'
+                        }`}>
+                          {metric.trend === 'up' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />}
+                        </div>
+                      </div>
+                      <div className="text-2xl font-bold text-gray-900">
+                        {metric.metric.includes('Score') ? metric.current : `${metric.current}%`}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        vs {metric.metric.includes('Score') ? metric.previous : `${metric.previous}%`} last period
                       </div>
                     </div>
-                    <div className="text-2xl font-bold text-gray-900">
-                      {metric.metric.includes('Score') ? metric.current : `${metric.current}%`}
-                    </div>
-                    <div className="text-xs text-gray-500">
-                      vs {metric.metric.includes('Score') ? metric.previous : `${metric.previous}%`} last period
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center text-gray-500">No communication data available</div>
+              )}
             </div>
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">AI Diagnostic Patterns</h3>
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-gray-200">
-                      <th className="text-left py-3 px-4 font-medium text-gray-700">Condition</th>
-                      <th className="text-left py-3 px-4 font-medium text-gray-700">Frequency</th>
-                      <th className="text-left py-3 px-4 font-medium text-gray-700">Accuracy Rate</th>
-                      <th className="text-left py-3 px-4 font-medium text-gray-700">Trend</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {diagnosticPatterns.map((pattern, index) => (
-                      <tr key={index} className="border-b border-gray-100 hover:bg-gray-50">
-                        <td className="py-3 px-4 font-medium text-gray-900">{pattern.condition}</td>
-                        <td className="py-3 px-4 text-gray-600">{pattern.frequency}</td>
-                        <td className="py-3 px-4">
-                          <div className="flex items-center">
-                            <div className="w-full bg-gray-200 rounded-full h-2 mr-2">
-                              <div 
-                                className="bg-green-600 h-2 rounded-full" 
-                                style={{ width: `${pattern.accuracy}%` }}
-                              ></div>
-                            </div>
-                            <span className="text-sm font-medium text-gray-900">{pattern.accuracy}%</span>
-                          </div>
-                        </td>
-                        <td className="py-3 px-4">
-                          <TrendingUp className="w-4 h-4 text-green-600" />
-                        </td>
+              {diagnosticPatterns.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-gray-200">
+                        <th className="text-left py-3 px-4 font-medium text-gray-700">Condition</th>
+                        <th className="text-left py-3 px-4 font-medium text-gray-700">Frequency</th>
+                        <th className="text-left py-3 px-4 font-medium text-gray-700">Accuracy Rate</th>
+                        <th className="text-left py-3 px-4 font-medium text-gray-700">Trend</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {diagnosticPatterns.map((pattern, index) => (
+                        <tr key={index} className="border-b border-gray-100 hover:bg-gray-50">
+                          <td className="py-3 px-4 font-medium text-gray-900">{pattern.condition}</td>
+                          <td className="py-3 px-4 text-gray-600">{pattern.frequency}</td>
+                          <td className="py-3 px-4">
+                            <div className="flex items-center">
+                              <div className="w-full bg-gray-200 rounded-full h-2 mr-2">
+                                <div 
+                                  className="bg-green-600 h-2 rounded-full" 
+                                  style={{ width: `${pattern.accuracy}%` }}
+                                ></div>
+                              </div>
+                              <span className="text-sm font-medium text-gray-900">{pattern.accuracy}%</span>
+                            </div>
+                          </td>
+                          <td className="py-3 px-4">
+                            <div className={`w-4 h-4 flex items-center justify-center ${
+                              pattern.trend === 'up' ? 'text-green-600' : 'text-red-600'
+                            }`}>
+                              {pattern.trend === 'up' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="text-center text-gray-500">No diagnostic data available</div>
+              )}
             </div>
           </div>
         )}
@@ -612,7 +676,7 @@ const AdminDashboard = () => {
         {activeTab === 'insights' && (
           <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {healthAlerts.slice(0, 3).map((alert, index) => (
+              {healthAlerts.length > 0 ? healthAlerts.slice(0, 3).map((alert, index) => (
                 <div key={index} className={`bg-gradient-to-r ${
                   alert.severity === 'high' ? 'from-red-500 to-red-600' :
                   alert.severity === 'medium' ? 'from-orange-500 to-orange-600' :
@@ -629,135 +693,157 @@ const AdminDashboard = () => {
                     View Details
                   </button>
                 </div>
-              ))}
+              )) : (
+                <div className="text-center text-gray-500 col-span-3">No health alerts available</div>
+              )}
             </div>
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-6">AI Model Performance</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <h4 className="font-medium text-gray-700 mb-3">Response Quality Metrics</h4>
-                  <div className="space-y-3">
-                    {aiPerformance.quality && Object.entries(aiPerformance.quality).map(([key, value], index) => (
-                      <div key={index} className="flex justify-between items-center">
-                        <span className="text-sm text-gray-600">{key}</span>
-                        <div className="flex items-center space-x-2">
-                          <div className="w-24 bg-gray-200 rounded-full h-2">
-                            <div className="bg-green-500 h-2 rounded-full" style={{ width: `${value}%` }}></div>
+              {aiPerformance.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <h4 className="font-medium text-gray-700 mb-3">Response Quality Metrics</h4>
+                    <div className="space-y-3">
+                      {aiPerformance.filter(m => m.metric.includes('Quality')).map((metric, index) => (
+                        <div key={index} className="flex justify-between items-center">
+                          <span className="text-sm text-gray-600">{metric.metric}</span>
+                          <div className="flex items-center space-x-2">
+                            <div className="w-24 bg-gray-200 rounded-full h-2">
+                              <div className="bg-green-500 h-2 rounded-full" style={{ width: `${metric.value}%` }}></div>
+                            </div>
+                            <span className="text-sm font-medium">{metric.value}%</span>
                           </div>
-                          <span className="text-sm font-medium">{value}%</span>
                         </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <h4 className="font-medium text-gray-700 mb-3">Safety Metrics</h4>
+                    <div className="space-y-3">
+                      {aiPerformance.filter(m => m.metric.includes('Safety')).map((metric, index) => (
+                        <div key={index} className="flex justify-between items-center">
+                          <span className="text-sm text-gray-600">{metric.metric}</span>
+                          <div className="flex items-center space-x-2">
+                            <div className="w-24 bg-gray-200 rounded-full h-2">
+                              <div className="bg-blue-500 h-2 rounded-full" style={{ width: `${metric.value}%` }}></div>
+                            </div>
+                            <span className="text-sm font-medium">{metric.value}%</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
-                <div>
-                  <h4 className="font-medium text-gray-700 mb-3">Safety Metrics</h4>
-                  <div className="space-y-3">
-                    {aiPerformance.safety && Object.entries(aiPerformance.safety).map(([key, value], index) => (
-                      <div key={index} className="flex justify-between items-center">
-                        <span className="text-sm text-gray-600">{key}</span>
-                        <div className="flex items-center space-x-2">
-                          <div className="w-24 bg-gray-200 rounded-full h-2">
-                            <div className="bg-blue-500 h-2 rounded-full" style={{ width: `${value}%` }}></div>
-                          </div>
-                          <span className="text-sm font-medium">{value}%</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
+              ) : (
+                <div className="text-center text-gray-500">No AI performance data available</div>
+              )}
             </div>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Treatment Preference Trends</h3>
-                <div className="space-y-4">
-                  {treatmentPreferences.map((item, index) => (
-                    <div key={index} className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-gray-700">{item.treatment}</span>
-                      <div className="flex items-center space-x-3">
-                        <div className="w-32 bg-gray-200 rounded-full h-2">
-                          <div 
-                            className="bg-blue-500 h-2 rounded-full transition-all duration-300" 
-                            style={{ width: `${item.percentage}%` }}
-                          ></div>
-                        </div>
-                        <span className="text-sm font-medium text-gray-900 w-8">{item.percentage}%</span>
-                        <div className={`w-4 h-4 flex items-center justify-center ${
-                          item.trend === 'up' ? 'text-green-500' : 
-                          item.trend === 'down' ? 'text-red-500' : 'text-gray-400'
-                        }`}>
-                          {item.trend === 'up' ? <ArrowUp className="w-3 h-3" /> : 
-                           item.trend === 'down' ? <ArrowDown className="w-3 h-3" /> : 
-                           <div className="w-3 h-0.5 bg-gray-400 rounded"></div>}
+                {treatmentPreferences.length > 0 ? (
+                  <div className="space-y-4">
+                    {treatmentPreferences.map((item, index) => (
+                      <div key={index} className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-gray-700">{item.treatment}</span>
+                        <div className="flex items-center space-x-3">
+                          <div className="w-32 bg-gray-200 rounded-full h-2">
+                            <div 
+                              className="bg-blue-500 h-2 rounded-full transition-all duration-300" 
+                              style={{ width: `${item.percentage}%` }}
+                            ></div>
+                          </div>
+                          <span className="text-sm font-medium text-gray-900 w-8">{item.percentage}%</span>
+                          <div className={`w-4 h-4 flex items-center justify-center ${
+                            item.trend === 'up' ? 'text-green-500' : 
+                            item.trend === 'down' ? 'text-red-500' : 'text-gray-400'
+                          }`}>
+                            {item.trend === 'up' ? <ArrowUp className="w-3 h-3" /> : 
+                             item.trend === 'down' ? <ArrowDown className="w-3 h-3" /> : 
+                             <div className="w-3 h-0.5 bg-gray-400 rounded"></div>}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center text-gray-500">No treatment preference data available</div>
+                )}
               </div>
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Health Literacy by Demographics</h3>
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={healthLiteracy}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="group" />
-                    <YAxis />
-                    <Tooltip />
-                    <Legend />
-                    <Bar dataKey="understanding" fill="#3B82F6" name="Understanding Rate" />
-                    <Bar dataKey="engagement" fill="#10B981" name="Engagement Rate" />
-                  </BarChart>
-                </ResponsiveContainer>
+                {healthLiteracy.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={healthLiteracy}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="group" />
+                      <YAxis />
+                      <Tooltip />
+                      <Legend />
+                      <Bar dataKey="understanding" fill="#3B82F6" name="Understanding Rate" />
+                      <Bar dataKey="engagement" fill="#10B981" name="Engagement Rate" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="text-center text-gray-500">No health literacy data available</div>
+                )}
               </div>
             </div>
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Workflow & Operational Insights</h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {workflowMetrics.map((metric, index) => (
-                  <div key={index} className={`text-center p-4 rounded-lg ${
-                    index === 0 ? 'bg-blue-50' : index === 1 ? 'bg-green-50' : 'bg-purple-50'
-                  }`}>
-                    <div className={`text-2xl font-bold ${
-                      index === 0 ? 'text-blue-600' : index === 1 ? 'text-green-600' : 'text-purple-600'
-                    } mb-2`}>{metric.value}</div>
-                    <div className="text-sm font-medium text-gray-700">{metric.metric}</div>
-                    <div className="text-xs text-gray-500 mt-1">{metric.change}</div>
-                  </div>
-                ))}
-              </div>
+              {workflowMetrics.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {workflowMetrics.map((metric, index) => (
+                    <div key={index} className={`text-center p-4 rounded-lg ${
+                      index === 0 ? 'bg-blue-50' : index === 1 ? 'bg-green-50' : 'bg-purple-50'
+                    }`}>
+                      <div className={`text-2xl font-bold ${
+                        index === 0 ? 'text-blue-600' : index === 1 ? 'text-green-600' : 'text-purple-600'
+                      } mb-2`}>{metric.value}</div>
+                      <div className="text-sm font-medium text-gray-700">{metric.metric}</div>
+                      <div className="text-xs text-gray-500 mt-1">{metric.change}</div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center text-gray-500">No workflow metrics available</div>
+              )}
             </div>
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Real-time Health Alerts</h3>
-              <div className="space-y-3">
-                {healthAlerts.map((alert, index) => (
-                  <div key={index} className={`flex items-start space-x-3 p-3 rounded-lg border ${
-                    alert.severity === 'high' ? 'bg-red-50 border-red-200' :
-                    alert.severity === 'medium' ? 'bg-orange-50 border-orange-200' :
-                    'bg-blue-50 border-blue-200'
-                  }`}>
-                    <div className={`p-1 rounded-full ${
-                      alert.severity === 'high' ? 'bg-red-100' :
-                      alert.severity === 'medium' ? 'bg-orange-100' :
-                      'bg-blue-100'
+              {healthAlerts.length > 0 ? (
+                <div className="space-y-3">
+                  {healthAlerts.map((alert, index) => (
+                    <div key={index} className={`flex items-start space-x-3 p-3 rounded-lg border ${
+                      alert.severity === 'high' ? 'bg-red-50 border-red-200' :
+                      alert.severity === 'medium' ? 'bg-orange-50 border-orange-200' :
+                      'bg-blue-50 border-blue-200'
                     }`}>
-                      <AlertTriangle className={`w-4 h-4 ${
-                        alert.severity === 'high' ? 'text-red-600' :
-                        alert.severity === 'medium' ? 'text-orange-600' :
-                        'text-blue-600'
-                      }`} />
+                      <div className={`p-1 rounded-full ${
+                        alert.severity === 'high' ? 'bg-red-100' :
+                        alert.severity === 'medium' ? 'bg-orange-100' :
+                        'bg-blue-100'
+                      }`}>
+                        <AlertTriangle className={`w-4 h-4 ${
+                          alert.severity === 'high' ? 'text-red-600' :
+                          alert.severity === 'medium' ? 'text-orange-600' :
+                          'text-blue-600'
+                        }`} />
+                      </div>
+                      <div className="flex-1">
+                        <div className="font-medium text-gray-900">{alert.title}</div>
+                        <div className="text-sm text-gray-600 mt-1">{alert.description}</div>
+                        <div className="text-xs text-gray-500 mt-2">{new Date(alert.time).toLocaleString()}</div>
+                      </div>
+                      <button className="text-gray-400 hover:text-gray-600">
+                        <Eye className="w-4 h-4" />
+                      </button>
                     </div>
-                    <div className="flex-1">
-                      <div className="font-medium text-gray-900">{alert.title}</div>
-                      <div className="text-sm text-gray-600 mt-1">{alert.description}</div>
-                      <div className="text-xs text-gray-500 mt-2">{new Date(alert.time).toLocaleString()}</div>
-                    </div>
-                    <button className="text-gray-400 hover:text-gray-600">
-                      <Eye className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center text-gray-500">No health alerts available</div>
+              )}
             </div>
           </div>
         )}
